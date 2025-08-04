@@ -86,8 +86,17 @@ const fetchRSSFeed = async (url: string): Promise<any> => {
 };
 
 const Index = () => {
-  const [feeds, setFeeds] = useState<Feed[]>(() => loadFromStorage(FEEDS_KEY, []));
-  const [articles, setArticles] = useState<Article[]>(() => loadFromStorage(ARTICLES_KEY, []));
+  // Load from localStorage or use empty arrays as defaults
+  const [feeds, setFeeds] = useState<Feed[]>(() => {
+    const stored = loadFromStorage(FEEDS_KEY, []);
+    console.log('Loaded feeds from storage:', stored);
+    return stored;
+  });
+  const [articles, setArticles] = useState<Article[]>(() => {
+    const stored = loadFromStorage(ARTICLES_KEY, []);
+    console.log('Loaded articles from storage:', stored);
+    return stored;
+  });
   const [selectedFeed, setSelectedFeed] = useState<string | null>('all');
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
@@ -105,6 +114,7 @@ const Index = () => {
 
   // Filter articles based on selected feed
   useEffect(() => {
+    console.log('Filtering articles, selectedFeed:', selectedFeed, 'articles length:', articles.length);
     if (selectedFeed === 'all') {
       setFilteredArticles(articles);
     } else if (selectedFeed === 'starred') {
@@ -199,8 +209,22 @@ const Index = () => {
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
+  console.log('Rendering Index component', { 
+    feedsLength: feeds.length, 
+    articlesLength: articles.length, 
+    filteredArticlesLength: filteredArticles.length,
+    selectedFeed,
+    selectedArticle 
+  });
+
   return (
     <div className="h-screen bg-background flex overflow-hidden">
+      {/* Debug info when no feeds exist */}
+      {feeds.length === 0 && (
+        <div className="absolute top-4 left-4 z-50 bg-yellow-100 text-yellow-800 p-2 rounded text-sm">
+          No feeds loaded. Add a feed to get started!
+        </div>
+      )}
       {/* Sidebar */}
       <FeedSidebar
         feeds={feeds}
