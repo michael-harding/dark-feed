@@ -3,14 +3,7 @@ import { FeedSidebar } from '@/components/FeedSidebar';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { useToast } from '@/hooks/use-toast';
-import Parser from 'rss-parser';
 import heroImage from '@/assets/rss-hero.jpg';
-
-const parser = new Parser({
-  customFields: {
-    item: ['author', 'creator']
-  }
-});
 
 interface Feed {
   id: string;
@@ -68,15 +61,24 @@ const saveToStorage = <T,>(key: string, value: T): void => {
   }
 };
 
-// RSS parsing functions
+// RSS parsing functions using RSS2JSON API
 const fetchRSSFeed = async (url: string): Promise<any> => {
   try {
-    // Use a CORS proxy for RSS feeds
-    const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
-    const response = await fetch(proxyUrl);
+    // Use RSS2JSON API which is browser-compatible
+    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
+    const response = await fetch(apiUrl);
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+    
     const data = await response.json();
-    const feed = await parser.parseString(data.contents);
-    return feed;
+    
+    if (data.status !== 'ok') {
+      throw new Error(data.message || 'Failed to parse RSS feed');
+    }
+    
+    return data;
   } catch (error) {
     console.error('Error fetching RSS feed:', error);
     throw error;
@@ -117,30 +119,30 @@ const Index = () => {
   const handleAddFeed = async (url: string) => {
     setIsLoading(true);
     try {
-      const feed = await fetchRSSFeed(url);
+      const data = await fetchRSSFeed(url);
       const feedId = Date.now().toString();
       
       const newFeed: Feed = {
         id: feedId,
-        title: feed.title || 'Unknown Feed',
+        title: data.feed?.title || 'Unknown Feed',
         url,
-        unreadCount: feed.items?.length || 0,
+        unreadCount: data.items?.length || 0,
       };
 
       // Convert RSS items to articles
-      const newArticles: Article[] = feed.items?.map((item: any, index: number) => ({
+      const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
         id: `${feedId}-${index}`,
         title: item.title || 'Untitled',
-        description: item.contentSnippet || item.summary || '',
+        description: item.description?.replace(/<[^>]*>/g, '') || '', // Strip HTML tags
         content: item.content || item.description || '',
         url: item.link || '',
         publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
         feedId,
-        feedTitle: feed.title || 'Unknown Feed',
+        feedTitle: data.feed?.title || 'Unknown Feed',
         isRead: false,
         isStarred: false,
         isBookmarked: false,
-        author: item.author || item.creator || ''
+        author: item.author || ''
       })) || [];
 
       setFeeds(prev => [...prev, newFeed]);
@@ -148,7 +150,7 @@ const Index = () => {
       
       toast({
         title: "Feed Added",
-        description: `Successfully added ${feed.title || url}`,
+        description: `Successfully added ${data.feed?.title || url}`,
       });
     } catch (error) {
       toast({
