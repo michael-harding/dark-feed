@@ -5,6 +5,9 @@ import { ArticleReader } from '@/components/ArticleReader';
 import { useToast } from '@/hooks/use-toast';
 import heroImage from '@/assets/rss-hero.jpg';
 
+// Add basic error logging
+console.log('Index page loading...');
+
 interface Feed {
   id: string;
   title: string;
