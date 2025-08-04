@@ -52,6 +52,13 @@ export default {
 					DEFAULT: 'hsl(var(--card))',
 					foreground: 'hsl(var(--card-foreground))'
 				},
+				// RSS Reader specific colors
+				'sidebar-bg': 'hsl(var(--sidebar-bg))',
+				'sidebar-border': 'hsl(var(--sidebar-border))',
+				'article-bg': 'hsl(var(--article-bg))',
+				'article-hover': 'hsl(var(--article-hover))',
+				'feed-unread': 'hsl(var(--feed-unread))',
+				'feed-read': 'hsl(var(--feed-read))',
 				sidebar: {
 					DEFAULT: 'hsl(var(--sidebar-background))',
 					foreground: 'hsl(var(--sidebar-foreground))',
