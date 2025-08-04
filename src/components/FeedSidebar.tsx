@@ -18,9 +18,10 @@ interface FeedSidebarProps {
   selectedFeed: string | null;
   onFeedSelect: (feedId: string) => void;
   onAddFeed: (url: string) => void;
+  isLoading?: boolean;
 }
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed }: FeedSidebarProps) => {
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, isLoading = false }: FeedSidebarProps) => {
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
 
@@ -72,8 +73,13 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed }: Fe
               className="bg-background"
             />
             <div className="flex gap-2">
-              <Button onClick={handleAddFeed} size="sm" className="flex-1">
-                Add
+              <Button 
+                onClick={handleAddFeed} 
+                size="sm" 
+                className="flex-1"
+                disabled={isLoading}
+              >
+                {isLoading ? "Adding..." : "Add"}
               </Button>
               <Button 
                 onClick={() => setShowAddFeed(false)} 
