@@ -1,8 +1,9 @@
 import { useState, useRef } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
 interface Feed {
@@ -19,12 +20,14 @@ interface FeedSidebarProps {
   onFeedSelect: (feedId: string) => void;
   onAddFeed: (url: string) => void;
   onImportFeeds: (feeds: Feed[]) => void;
+  onRemoveFeed: (feedId: string) => void;
   isLoading?: boolean;
 }
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, isLoading = false }: FeedSidebarProps) => {
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, isLoading = false }: FeedSidebarProps) => {
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
+  const [showSettings, setShowSettings] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddFeed = () => {
@@ -241,10 +244,55 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
             Import
           </Button>
         </div>
-        <Button variant="ghost" size="sm" className="w-full justify-start">
-          <Settings className="w-4 h-4 mr-2" />
-          Settings
-        </Button>
+        <Dialog open={showSettings} onOpenChange={setShowSettings}>
+          <DialogTrigger asChild>
+            <Button variant="ghost" size="sm" className="w-full justify-start">
+              <Settings className="w-4 h-4 mr-2" />
+              Settings
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Feed Settings</DialogTitle>
+            </DialogHeader>
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-foreground mb-3">Manage Feeds</h3>
+              <div className="space-y-2 max-h-96 overflow-y-auto">
+                {feeds.length === 0 ? (
+                  <p className="text-sm text-muted-foreground p-4 text-center">
+                    No feeds added yet. Add a feed to get started.
+                  </p>
+                ) : (
+                  feeds.map((feed) => (
+                    <div
+                      key={feed.id}
+                      className="flex items-center gap-3 p-3 border rounded-lg bg-card"
+                    >
+                      <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
+                        <Rss className="w-4 h-4" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{feed.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+                      </div>
+                      <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
+                        {feed.unreadCount}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onRemoveFeed(feed.id)}
+                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
         <input
           ref={fileInputRef}
           type="file"

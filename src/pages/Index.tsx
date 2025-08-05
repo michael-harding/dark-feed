@@ -307,6 +307,24 @@ const Index = () => {
     });
   };
 
+  const handleRemoveFeed = (feedId: string) => {
+    // Remove the feed
+    setFeeds(prev => prev.filter(feed => feed.id !== feedId));
+    
+    // Remove all articles from this feed
+    setArticles(prev => prev.filter(article => article.feedId !== feedId));
+    
+    // If the removed feed was selected, switch to "all"
+    if (selectedFeed === feedId) {
+      setSelectedFeed('all');
+    }
+    
+    toast({
+      title: "Feed Removed",
+      description: "Feed and its articles have been removed.",
+    });
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   console.log('Rendering Index component', { 
@@ -332,6 +350,7 @@ const Index = () => {
         onFeedSelect={setSelectedFeed}
         onAddFeed={handleAddFeed}
         onImportFeeds={handleImportFeeds}
+        onRemoveFeed={handleRemoveFeed}
         isLoading={isLoading}
       />
 
