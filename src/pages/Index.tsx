@@ -210,6 +210,28 @@ const Index = () => {
     }
   };
 
+  const handleImportFeeds = (importedFeeds: Feed[]) => {
+    // Filter out feeds that already exist (by URL)
+    const existingUrls = feeds.map(f => f.url);
+    const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
+    
+    if (newFeeds.length === 0) {
+      toast({
+        title: "No New Feeds",
+        description: "All feeds in the import file already exist.",
+      });
+      return;
+    }
+
+    // Add the new feeds
+    setFeeds(prev => [...prev, ...newFeeds]);
+    
+    toast({
+      title: "Feeds Imported",
+      description: `Successfully imported ${newFeeds.length} new feed(s).`,
+    });
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   console.log('Rendering Index component', { 
@@ -234,6 +256,7 @@ const Index = () => {
         selectedFeed={selectedFeed}
         onFeedSelect={setSelectedFeed}
         onAddFeed={handleAddFeed}
+        onImportFeeds={handleImportFeeds}
         isLoading={isLoading}
       />
 

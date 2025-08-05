@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -18,12 +18,14 @@ interface FeedSidebarProps {
   selectedFeed: string | null;
   onFeedSelect: (feedId: string) => void;
   onAddFeed: (url: string) => void;
+  onImportFeeds: (feeds: Feed[]) => void;
   isLoading?: boolean;
 }
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, isLoading = false }: FeedSidebarProps) => {
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, isLoading = false }: FeedSidebarProps) => {
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleAddFeed = () => {
     if (newFeedUrl.trim()) {
@@ -34,6 +36,51 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, isLo
   };
 
   const totalUnread = feeds.reduce((sum, feed) => sum + feed.unreadCount, 0);
+
+  const handleExportFeeds = () => {
+    const exportData = {
+      feeds,
+      exportedAt: new Date().toISOString(),
+      version: '1.0'
+    };
+    
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `rss-feeds-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
+  const handleImportFeeds = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const content = e.target?.result as string;
+        const importData = JSON.parse(content);
+        
+        if (importData.feeds && Array.isArray(importData.feeds)) {
+          onImportFeeds(importData.feeds);
+        } else {
+          alert('Invalid feed file format');
+        }
+      } catch (error) {
+        alert('Failed to import feeds. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+    
+    // Reset the input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
 
   return (
     <div className="w-80 bg-sidebar-bg border-r border-sidebar-border flex flex-col h-screen">
@@ -172,11 +219,39 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, isLo
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-sidebar-border">
+      <div className="p-4 border-t border-sidebar-border space-y-2">
+        <div className="flex gap-2">
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="flex-1 justify-start"
+            onClick={handleExportFeeds}
+            disabled={feeds.length === 0}
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="flex-1 justify-start"
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Upload className="w-4 h-4 mr-2" />
+            Import
+          </Button>
+        </div>
         <Button variant="ghost" size="sm" className="w-full justify-start">
           <Settings className="w-4 h-4 mr-2" />
           Settings
         </Button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".json"
+          onChange={handleImportFeeds}
+          className="hidden"
+        />
       </div>
     </div>
   );
