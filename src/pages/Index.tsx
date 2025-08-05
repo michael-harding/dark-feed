@@ -115,6 +115,74 @@ const Index = () => {
     saveToStorage(ARTICLES_KEY, articles);
   }, [articles]);
 
+  // Refresh all feeds on page load
+  useEffect(() => {
+    const refreshFeeds = async () => {
+      if (feeds.length === 0) return;
+      
+      setIsLoading(true);
+      console.log('Refreshing feeds on page load...');
+      
+      try {
+        for (const feed of feeds) {
+          try {
+            const data = await fetchRSSFeed(feed.url);
+            
+            // Convert RSS items to articles
+            const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
+              id: `${feed.id}-${Date.now()}-${index}`,
+              title: item.title || 'Untitled',
+              description: item.description?.replace(/<[^>]*>/g, '') || '',
+              content: item.content || item.description || '',
+              url: item.link || '',
+              publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+              feedId: feed.id,
+              feedTitle: feed.title,
+              isRead: false,
+              isStarred: false,
+              isBookmarked: false,
+              author: item.author || ''
+            })) || [];
+
+            // Filter out articles that already exist (by URL)
+            setArticles(prev => {
+              const existingUrls = prev.map(a => a.url);
+              const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
+              
+              if (uniqueNewArticles.length > 0) {
+                console.log(`Found ${uniqueNewArticles.length} new articles for ${feed.title}`);
+                
+                // Update feed unread count
+                setFeeds(prevFeeds => prevFeeds.map(f => 
+                  f.id === feed.id 
+                    ? { ...f, unreadCount: f.unreadCount + uniqueNewArticles.length }
+                    : f
+                ));
+                
+                return [...prev, ...uniqueNewArticles];
+              }
+              
+              return prev;
+            });
+          } catch (error) {
+            console.error(`Failed to refresh feed ${feed.title}:`, error);
+          }
+        }
+        
+        toast({
+          title: "Feeds Refreshed",
+          description: "Checked for new articles",
+        });
+      } catch (error) {
+        console.error('Error refreshing feeds:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    refreshFeeds();
+  }, []); // Only run on initial page load
+
   // Filter articles based on selected feed
   useEffect(() => {
     console.log('Filtering articles, selectedFeed:', selectedFeed, 'articles length:', articles.length);
