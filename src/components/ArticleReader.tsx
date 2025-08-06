@@ -140,7 +140,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
 
           {/* Content */}
           <div 
-            className="prose prose-invert max-w-none font-open-dyslexic prose-headings:text-foreground prose-headings:font-open-dyslexic prose-p:text-foreground prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80 prose-code:text-foreground prose-pre:bg-muted prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary"
+            className="prose prose-invert max-w-none font-open-dyslexic prose-headings:text-foreground prose-headings:font-open-dyslexic prose-p:text-foreground prose-p:mb-4 prose-strong:text-foreground prose-a:text-primary hover:prose-a:text-primary/80 prose-code:text-foreground prose-pre:bg-muted prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary"
             dangerouslySetInnerHTML={{ __html: article.content }}
           />
         </article>
