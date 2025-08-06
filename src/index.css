@@ -112,8 +112,12 @@
   body {
     @apply bg-background text-foreground;
   }
-  
+
   .font-open-dyslexic {
     font-kerning: none;
+  }
+
+  .prose > p {
+    margin-top: 1em;
   }
 }
