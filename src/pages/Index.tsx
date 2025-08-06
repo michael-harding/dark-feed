@@ -336,7 +336,7 @@ const Index = () => {
   });
 
   return (
-    <div className="h-screen bg-muted/40 flex overflow-hidden">
+    <div className="h-screen flex overflow-hidden" style={{ backgroundColor: 'hsl(0 0% 40%)' }}>
       {/* Debug info when no feeds exist */}
       {feeds.length === 0 && (
         <div className="absolute top-4 left-4 z-50 bg-yellow-100 text-yellow-800 p-2 rounded text-sm">
