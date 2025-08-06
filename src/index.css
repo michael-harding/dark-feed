@@ -6,7 +6,7 @@
 
 @layer base {
   :root {
-    --background: 240 10% 3.9%;
+    --background: 240 0% 20%;
     --foreground: 0 0% 98%;
 
     --card: 240 10% 3.9%;
@@ -41,7 +41,7 @@
     --article-hover: 240 3.7% 15.9%;
     --feed-unread: 46 87% 65%;
     --feed-read: 240 5% 64.9%;
-    
+
     /* Gradients */
     --gradient-primary: linear-gradient(135deg, hsl(46 87% 65%), hsl(46 87% 75%));
     --gradient-dark: linear-gradient(180deg, hsl(240 10% 3.9%), hsl(240 5.9% 10%));
