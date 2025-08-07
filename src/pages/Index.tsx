@@ -202,26 +202,15 @@ const Index = () => {
     initializeApp();
   }, []); // Only run on initial page load
 
-  // Filter articles based on selected feed
+  // Show all articles, sorted by date
   useEffect(() => {
-    console.log('Filtering articles, selectedFeed:', selectedFeed, 'articles length:', articles.length);
-    let filtered: Article[] = [];
-    
-    if (selectedFeed === 'all') {
-      filtered = articles;
-    } else if (selectedFeed === 'starred') {
-      filtered = articles.filter(article => article.isStarred);
-    } else if (selectedFeed === 'bookmarks') {
-      filtered = articles.filter(article => article.isBookmarked);
-    } else {
-      filtered = articles.filter(article => article.feedId === selectedFeed);
-    }
+    console.log('Showing all articles, length:', articles.length);
     
     // Sort by publishedAt date, newest first
-    filtered.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    const sorted = [...articles].sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
     
-    setFilteredArticles(filtered);
-  }, [selectedFeed, articles]);
+    setFilteredArticles(sorted);
+  }, [articles]);
 
   const handleAddFeed = async (url: string) => {
     setIsLoading(true);
