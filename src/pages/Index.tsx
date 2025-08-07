@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { FeedSidebar } from '@/components/FeedSidebar';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
+import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
 import heroImage from '@/assets/rss-hero.jpg';
 
@@ -104,6 +105,7 @@ const Index = () => {
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [initialLoading, setInitialLoading] = useState(true);
   const { toast } = useToast();
 
   // Save to localStorage whenever feeds or articles change
@@ -115,10 +117,26 @@ const Index = () => {
     saveToStorage(ARTICLES_KEY, articles);
   }, [articles]);
 
-  // Refresh all feeds on page load
+  // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
-    const refreshFeeds = async () => {
-      if (feeds.length === 0) return;
+    const initializeApp = async () => {
+      // Clean up read articles older than 48 hours
+      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      setArticles(prev => {
+        const filteredArticles = prev.filter(article => 
+          !article.isRead || article.publishedAt > fortyEightHoursAgo
+        );
+        const removedCount = prev.length - filteredArticles.length;
+        if (removedCount > 0) {
+          console.log(`Cleaned up ${removedCount} old read articles`);
+        }
+        return filteredArticles;
+      });
+
+      if (feeds.length === 0) {
+        setInitialLoading(false);
+        return;
+      }
       
       setIsLoading(true);
       console.log('Refreshing feeds on page load...');
@@ -177,10 +195,11 @@ const Index = () => {
         console.error('Error refreshing feeds:', error);
       } finally {
         setIsLoading(false);
+        setInitialLoading(false);
       }
     };
 
-    refreshFeeds();
+    initializeApp();
   }, []); // Only run on initial page load
 
   // Filter articles based on selected feed
@@ -334,6 +353,17 @@ const Index = () => {
     selectedFeed,
     selectedArticle 
   });
+
+  if (initialLoading) {
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Loading feeds...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen bg-background flex overflow-hidden">
