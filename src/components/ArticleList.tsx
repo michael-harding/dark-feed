@@ -28,13 +28,13 @@ interface ArticleListProps {
   onMarkAsRead: (articleId: string) => void;
 }
 
-export const ArticleList = ({ 
-  articles, 
-  selectedArticle, 
-  onArticleSelect, 
-  onToggleStar, 
-  onToggleBookmark, 
-  onMarkAsRead 
+export const ArticleList = ({
+  articles,
+  selectedArticle,
+  onArticleSelect,
+  onToggleStar,
+  onToggleBookmark,
+  onMarkAsRead
 }: ArticleListProps) => {
   return (
     <div className="w-96 bg-article-bg border-r border-border flex flex-col h-screen">
@@ -88,11 +88,11 @@ export const ArticleList = ({
                         }}
                         className="h-6 w-6 p-0"
                       >
-                        <Star 
+                        <Star
                           className={cn(
                             "w-3 h-3",
                             article.isStarred ? "fill-feed-unread text-feed-unread" : "text-muted-foreground"
-                          )} 
+                          )}
                         />
                       </Button>
                       <Button
@@ -104,11 +104,11 @@ export const ArticleList = ({
                         }}
                         className="h-6 w-6 p-0"
                       >
-                        <Bookmark 
+                        <Bookmark
                           className={cn(
                             "w-3 h-3",
                             article.isBookmarked ? "fill-feed-unread text-feed-unread" : "text-muted-foreground"
-                          )} 
+                          )}
                         />
                       </Button>
                       <Button
@@ -128,7 +128,7 @@ export const ArticleList = ({
                   {/* Title */}
                   <h3 className={cn(
                     "font-medium leading-tight",
-                    !article.isRead ? "text-foreground" : "text-muted-foreground"
+                    !article.isRead ? "text-bright-foreground" : "text-muted-foreground"
                   )}>
                     {article.title}
                   </h3>

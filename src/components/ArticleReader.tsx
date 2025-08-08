@@ -76,11 +76,11 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
               size="sm"
               onClick={() => onToggleStar(article.id)}
             >
-              <Star 
+              <Star
                 className={cn(
                   "w-4 h-4",
                   article.isStarred ? "fill-feed-unread text-feed-unread" : "text-muted-foreground"
-                )} 
+                )}
               />
             </Button>
             <Button
@@ -88,11 +88,11 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
               size="sm"
               onClick={() => onToggleBookmark(article.id)}
             >
-              <Bookmark 
+              <Bookmark
                 className={cn(
                   "w-4 h-4",
                   article.isBookmarked ? "fill-feed-unread text-feed-unread" : "text-muted-foreground"
-                )} 
+                )}
               />
             </Button>
             <Button
@@ -133,17 +133,17 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
         <article className="max-w-3xl mx-auto p-8">
           {/* Description */}
           {article.description && (
-            <div className="text-lg text-muted-foreground mb-8 font-medium leading-relaxed">
+            <div className="text-lg text-muted-foreground mb-8 font-medium leading-relaxed line-clamp-5">
               {article.description}
             </div>
           )}
 
           {/* Content */}
-          <div 
+          <div
             className="prose prose-invert max-w-none font-open-dyslexic prose-headings:text-foreground prose-headings:font-open-dyslexic prose-p:text-foreground prose-p:mb-4 prose-strong:text-foreground prose-a:text-accent prose-a:underline hover:prose-a:text-accent/80 prose-code:text-foreground prose-pre:bg-muted prose-blockquote:text-muted-foreground prose-blockquote:border-l-primary"
-            dangerouslySetInnerHTML={{ 
+            dangerouslySetInnerHTML={{
               __html: article.content.replace(
-                /<a\s+([^>]*?)>/gi, 
+                /<a\s+([^>]*?)>/gi,
                 '<a $1 target="_blank" rel="noopener noreferrer">'
               )
             }}
