@@ -120,19 +120,6 @@ const Index = () => {
   // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
     const initializeApp = async () => {
-      // Clean up read articles older than 48 hours
-      const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-      setArticles(prev => {
-        const filteredArticles = prev.filter(article => 
-          !article.isRead || article.publishedAt > fortyEightHoursAgo
-        );
-        const removedCount = prev.length - filteredArticles.length;
-        if (removedCount > 0) {
-          console.log(`Cleaned up ${removedCount} old read articles`);
-        }
-        return filteredArticles;
-      });
-
       if (feeds.length === 0) {
         setInitialLoading(false);
         return;
@@ -141,10 +128,20 @@ const Index = () => {
       setIsLoading(true);
       console.log('Refreshing feeds on page load...');
       
+      const currentFeedArticleUrls = new Set<string>();
+      
       try {
+        // First, refresh feeds and collect current article URLs
         for (const feed of feeds) {
           try {
             const data = await fetchRSSFeed(feed.url);
+            
+            // Collect URLs of current articles in the feed
+            data.items?.forEach((item: any) => {
+              if (item.link) {
+                currentFeedArticleUrls.add(item.link);
+              }
+            });
             
             // Convert RSS items to articles
             const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
@@ -186,6 +183,27 @@ const Index = () => {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
           }
         }
+        
+        // After refreshing all feeds, clean up read articles older than 48 hours
+        // that are no longer present in any feed
+        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
+        setArticles(prev => {
+          const filteredArticles = prev.filter(article => {
+            // Keep article if:
+            // 1. It's not read, OR
+            // 2. It's newer than 48 hours, OR
+            // 3. It's still present in the current feed data
+            return !article.isRead || 
+                   article.publishedAt > fortyEightHoursAgo || 
+                   currentFeedArticleUrls.has(article.url);
+          });
+          
+          const removedCount = prev.length - filteredArticles.length;
+          if (removedCount > 0) {
+            console.log(`Cleaned up ${removedCount} old read articles that are no longer in feeds`);
+          }
+          return filteredArticles;
+        });
         
         toast({
           title: "Feeds Refreshed",
