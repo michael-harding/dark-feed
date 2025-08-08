@@ -69,7 +69,7 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 const fetchRSSFeed = async (url: string): Promise<any> => {
   try {
     // Use RSS2JSON API which is browser-compatible
-    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}&count=50`;
+    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
     const response = await fetch(apiUrl);
     
     if (!response.ok) {
