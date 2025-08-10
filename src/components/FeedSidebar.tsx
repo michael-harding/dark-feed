@@ -1,5 +1,5 @@
-import { useState, useRef } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -28,7 +28,42 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
+  const [accentColor, setAccentColor] = useState('46 87% 65%'); // Default yellow accent
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Predefined accent colors
+  const accentColors = [
+    { name: 'Yellow', value: '46 87% 65%', hex: '#fbbf24' },
+    { name: 'Blue', value: '217 91% 60%', hex: '#3b82f6' },
+    { name: 'Green', value: '142 76% 36%', hex: '#10b981' },
+    { name: 'Purple', value: '262 83% 58%', hex: '#8b5cf6' },
+    { name: 'Pink', value: '330 81% 60%', hex: '#ec4899' },
+    { name: 'Orange', value: '25 95% 53%', hex: '#f97316' },
+    { name: 'Red', value: '0 84% 60%', hex: '#ef4444' },
+    { name: 'Teal', value: '173 80% 40%', hex: '#14b8a6' },
+  ];
+
+  // Load saved accent color on mount
+  useEffect(() => {
+    const saved = localStorage.getItem('rss-accent-color');
+    if (saved) {
+      setAccentColor(saved);
+      updateAccentColor(saved);
+    }
+  }, []);
+
+  // Update CSS variables when accent color changes
+  const updateAccentColor = (color: string) => {
+    document.documentElement.style.setProperty('--accent', color);
+    document.documentElement.style.setProperty('--ring', color);
+    document.documentElement.style.setProperty('--feed-unread', color);
+  };
+
+  const handleAccentColorChange = (color: string) => {
+    setAccentColor(color);
+    updateAccentColor(color);
+    localStorage.setItem('rss-accent-color', color);
+  };
 
   const handleAddFeed = () => {
     if (newFeedUrl.trim()) {
@@ -253,10 +288,40 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
           </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
-              <DialogTitle>Feed Settings</DialogTitle>
+              <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
-            <div className="mt-4">
-              <h3 className="text-sm font-medium text-foreground mb-3">Manage Feeds</h3>
+            <div className="mt-4 space-y-6">
+              {/* Accent Color Section */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Palette className="w-4 h-4" />
+                  Accent Color
+                </h3>
+                <div className="grid grid-cols-4 gap-3">
+                  {accentColors.map((color) => (
+                    <button
+                      key={color.name}
+                      onClick={() => handleAccentColorChange(color.value)}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
+                        accentColor === color.value 
+                          ? "border-accent bg-accent/10" 
+                          : "border-border hover:border-accent/50"
+                      )}
+                    >
+                      <div 
+                        className="w-8 h-8 rounded-full border-2 border-white/20"
+                        style={{ backgroundColor: color.hex }}
+                      />
+                      <span className="text-xs font-medium">{color.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Manage Feeds Section */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3">Manage Feeds</h3>
               <div className="space-y-2 max-h-96 overflow-y-auto">
                 {feeds.length === 0 ? (
                   <p className="text-sm text-muted-foreground p-4 text-center">
@@ -289,6 +354,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                     </div>
                   ))
                 )}
+                </div>
               </div>
             </div>
           </DialogContent>
