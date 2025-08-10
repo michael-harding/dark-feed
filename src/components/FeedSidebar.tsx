@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
+import { faviconGenerator } from '@/utils/faviconGenerator';
 
 interface Feed {
   id: string;
@@ -50,6 +51,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       setAccentColor(saved);
       updateAccentColor(saved);
     }
+    
+    // Initialize favicon generator
+    faviconGenerator.loadBaseImage().catch(console.error);
   }, []);
 
   // Update CSS variables when accent color changes
@@ -63,6 +67,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     setAccentColor(color);
     updateAccentColor(color);
     localStorage.setItem('rss-accent-color', color);
+    
+    // Update favicon to match new accent color
+    faviconGenerator.generateAndUpdateFavicon(color);
   };
 
   const handleAddFeed = () => {
