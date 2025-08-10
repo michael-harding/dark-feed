@@ -147,49 +147,8 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
             </p>
           </div>
         </div>
-        
-        <Button 
-          onClick={() => setShowAddFeed(true)} 
-          className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-medium"
-          size="default"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add RSS Feed
-        </Button>
       </div>
 
-      {/* Add Feed Form */}
-      {showAddFeed && (
-        <div className="p-4 border-b border-sidebar-border bg-muted/30">
-          <div className="space-y-3">
-            <Input
-              placeholder="Enter RSS feed URL..."
-              value={newFeedUrl}
-              onChange={(e) => setNewFeedUrl(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleAddFeed()}
-              className="bg-background"
-            />
-            <div className="flex gap-2">
-              <Button 
-                onClick={handleAddFeed} 
-                size="sm" 
-                className="flex-1"
-                disabled={isLoading}
-              >
-                {isLoading ? "Adding..." : "Add"}
-              </Button>
-              <Button 
-                onClick={() => setShowAddFeed(false)} 
-                variant="outline" 
-                size="sm"
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Navigation */}
       <div className="p-4 border-b border-sidebar-border">
@@ -269,28 +228,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-sidebar-border space-y-2">
-        <div className="flex gap-2">
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="flex-1 justify-start"
-            onClick={handleExportFeeds}
-            disabled={feeds.length === 0}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Export
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            className="flex-1 justify-start"
-            onClick={() => fileInputRef.current?.click()}
-          >
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
-        </div>
+      <div className="p-4 border-t border-sidebar-border">
         <Dialog open={showSettings} onOpenChange={setShowSettings}>
           <DialogTrigger asChild>
             <Button variant="ghost" size="sm" className="w-full justify-start">
@@ -303,6 +241,58 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
             <div className="mt-4 space-y-6">
+              {/* Feed Management Section */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <Rss className="w-4 h-4" />
+                  Feed Management
+                </h3>
+                
+                {/* Add Feed Form */}
+                <div className="space-y-3 mb-4 p-4 border rounded-lg bg-muted/30">
+                  <label className="text-sm font-medium">Add New Feed</label>
+                  <Input
+                    placeholder="Enter RSS feed URL..."
+                    value={newFeedUrl}
+                    onChange={(e) => setNewFeedUrl(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleAddFeed()}
+                    className="bg-background"
+                  />
+                  <Button 
+                    onClick={handleAddFeed} 
+                    size="sm" 
+                    className="w-full"
+                    disabled={isLoading || !newFeedUrl.trim()}
+                  >
+                    <Plus className="w-4 h-4 mr-2" />
+                    {isLoading ? "Adding..." : "Add Feed"}
+                  </Button>
+                </div>
+
+                {/* Import/Export */}
+                <div className="flex gap-2 mb-4">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={handleExportFeeds}
+                    disabled={feeds.length === 0}
+                  >
+                    <Download className="w-4 h-4 mr-2" />
+                    Export Feeds
+                  </Button>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="flex-1"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="w-4 h-4 mr-2" />
+                    Import Feeds
+                  </Button>
+                </div>
+              </div>
+
               {/* Accent Color Section */}
               <div>
                 <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
