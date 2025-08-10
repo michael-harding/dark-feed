@@ -124,11 +124,16 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     <div className="w-80 bg-sidebar-bg border-r border-sidebar-border flex flex-col h-screen">
       {/* Header */}
       <div className="p-6 border-b border-sidebar-border">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-            <Rss className="w-5 h-5 text-primary-foreground" />
+        <div className="flex items-center gap-3 mb-6">
+          <div className="relative">
+            <div className="w-12 h-12 bg-gradient-to-br from-accent to-accent/80 rounded-xl flex items-center justify-center shadow-lg">
+              <Rss className="w-6 h-6 text-primary-foreground" />
+            </div>
+            <div className="absolute -top-1 -right-1 w-4 h-4 bg-accent rounded-full flex items-center justify-center">
+              <div className="w-2 h-2 bg-primary-foreground rounded-full animate-pulse" />
+            </div>
           </div>
-          <div>
+          <div className="flex-1">
             <h1 className="text-xl font-bold text-foreground">RSS Reader</h1>
             <p className="text-sm text-muted-foreground">
               {totalUnread} unread articles
@@ -138,11 +143,11 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
         
         <Button 
           onClick={() => setShowAddFeed(true)} 
-          className="w-full"
-          size="sm"
+          className="w-full bg-accent hover:bg-accent/90 text-accent-foreground font-medium"
+          size="default"
         >
           <Plus className="w-4 h-4 mr-2" />
-          Add Feed
+          Add RSS Feed
         </Button>
       </div>
 
