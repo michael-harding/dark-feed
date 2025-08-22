@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -23,6 +23,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';
 
@@ -91,14 +92,26 @@ const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
       <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
         {feed.unreadCount}
       </Badge>
-      <Button
-        variant="ghost"
-        size="sm"
-        onClick={() => onRemove(feed.id)}
-        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-      >
-        <Trash2 className="w-4 h-4" />
-      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0 hover:bg-muted"
+          >
+            <MoreVertical className="w-4 h-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => onRemove(feed.id)}
+            className="text-destructive focus:text-destructive"
+          >
+            <Trash2 className="w-4 h-4 mr-2" />
+            Delete Feed
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 };
