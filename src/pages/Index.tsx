@@ -390,6 +390,28 @@ const Index = () => {
     });
   };
 
+  const handleMarkAllAsRead = (feedId: string) => {
+    // Mark all articles from this feed as read
+    setArticles(prev => prev.map(article => 
+      article.feedId === feedId && !article.isRead
+        ? { ...article, isRead: true }
+        : article
+    ));
+    
+    // Reset the feed's unread count to 0
+    setFeeds(prev => prev.map(feed => 
+      feed.id === feedId 
+        ? { ...feed, unreadCount: 0 }
+        : feed
+    ));
+    
+    const feed = feeds.find(f => f.id === feedId);
+    toast({
+      title: "Articles Marked as Read",
+      description: `All articles in "${feed?.title}" have been marked as read.`,
+    });
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   console.log('Rendering Index component', { 
@@ -428,6 +450,7 @@ const Index = () => {
         onImportFeeds={handleImportFeeds}
         onRemoveFeed={handleRemoveFeed}
         onRenameFeed={handleRenameFeed}
+        onMarkAllAsRead={handleMarkAllAsRead}
         onReorderFeeds={handleReorderFeeds}
         isLoading={isLoading}
       />
