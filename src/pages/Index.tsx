@@ -354,18 +354,20 @@ const Index = () => {
   const handleMarkAsRead = (articleId: string) => {
     setArticles(prev => prev.map(article =>
       article.id === articleId
-        ? { ...article, isRead: true }
+        ? { ...article, isRead: !article.isRead }
         : article
     ));
 
     // Update feed unread count
     const article = articles.find(a => a.id === articleId);
-    if (article && !article.isRead) {
-      setFeeds(prev => prev.map(feed =>
-        feed.id === article.feedId
-          ? { ...feed, unreadCount: Math.max(0, feed.unreadCount - 1) }
-          : feed
-      ));
+    if (article) {
+      setFeeds(prev => prev.map(feed => {
+        if (feed.id === article.feedId) {
+          const delta = article.isRead ? 1 : -1;
+          return { ...feed, unreadCount: Math.max(0, feed.unreadCount + delta) };
+        }
+        return feed;
+      }));
     }
   };
 

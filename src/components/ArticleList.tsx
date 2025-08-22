@@ -1,5 +1,5 @@
 import { formatDistanceToNow } from 'date-fns';
-import { ExternalLink, Star, Bookmark, Eye } from 'lucide-react';
+import { ExternalLink, Star, Bookmark, Eye, EyeOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -102,6 +102,22 @@ export const ArticleList = ({
                       {article.feedTitle}
                     </Badge>
                     <div className="flex items-center gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={e => {
+                          e.stopPropagation();
+                          onMarkAsRead(article.id);
+                        }}
+                        className="h-6 w-6 p-0"
+                        title={article.isRead ? 'Mark as unread' : 'Mark as read'}
+                      >
+                        {article.isRead ? (
+                          <EyeOff className="w-3 h-3 text-muted-foreground" />
+                        ) : (
+                          <Eye className="w-3 h-3 text-feed-unread" />
+                        )}
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
