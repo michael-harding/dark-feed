@@ -206,9 +206,36 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
 
   // Update CSS variables when accent color changes
   const updateAccentColor = (color: string) => {
+    // Parse the HSL color string (e.g., "46 87% 65%")
+    const [hue, saturation, lightness] = color.split(' ');
+    const h = parseInt(hue);
+    const s = parseInt(saturation.replace('%', ''));
+    const l = parseInt(lightness.replace('%', ''));
+    
+    // Update main accent color
     document.documentElement.style.setProperty('--accent', color);
     document.documentElement.style.setProperty('--ring', color);
     document.documentElement.style.setProperty('--feed-unread', color);
+    
+    // Generate and update all accent shades
+    const shades = [
+      { name: '50', lightness: Math.min(95, l + 30) },
+      { name: '100', lightness: Math.min(90, l + 25) },
+      { name: '200', lightness: Math.min(85, l + 20) },
+      { name: '300', lightness: Math.min(80, l + 15) },
+      { name: '400', lightness: Math.min(75, l + 10) },
+      { name: '500', lightness: l }, // Default
+      { name: '600', lightness: Math.max(10, l - 10) },
+      { name: '700', lightness: Math.max(15, l - 20) },
+      { name: '800', lightness: Math.max(20, l - 30) },
+      { name: '900', lightness: Math.max(25, l - 40) },
+      { name: '950', lightness: Math.max(15, l - 50) },
+    ];
+    
+    shades.forEach(shade => {
+      const shadeColor = `${h} ${s}% ${shade.lightness}%`;
+      document.documentElement.style.setProperty(`--accent-${shade.name}`, shadeColor);
+    });
   };
 
   const handleAccentColorChange = (color: string) => {

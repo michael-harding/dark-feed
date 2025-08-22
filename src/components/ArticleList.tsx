@@ -62,7 +62,7 @@ export const ArticleList = ({
                 key={article.id}
                 className={cn(
                   "p-4 cursor-pointer transition-colors hover:bg-article-hover",
-                  selectedArticle === article.id && "bg-accent",
+                  selectedArticle === article.id && "bg-accent-950",
                   !article.isRead && "border-l-4 border-l-feed-unread"
                 )}
                 onClick={() => {

@@ -25,8 +25,21 @@
     --muted: 240 3.7% 15.9%;
     --muted-foreground: 240 5% 64.9%;
 
-    --accent:  hsl(46 87% 65%);
+    --accent: 46 87% 65%;
     --accent-foreground: 0 0% 25%;
+
+    /* Accent color shades */
+    --accent-50: 46 87% 95%;
+    --accent-100: 46 87% 90%;
+    --accent-200: 46 87% 85%;
+    --accent-300: 46 87% 80%;
+    --accent-400: 46 87% 75%;
+    --accent-500: 46 87% 65%;
+    --accent-600: 46 87% 55%;
+    --accent-700: 46 87% 45%;
+    --accent-800: 46 87% 35%;
+    --accent-900: 46 87% 25%;
+    --accent-950: 46 87% 15%;
 
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
@@ -87,6 +100,19 @@
 
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
+
+    /* Accent color shades for dark mode */
+    --accent-50: 217.2 32.6% 5%;
+    --accent-100: 217.2 32.6% 10%;
+    --accent-200: 217.2 32.6% 15%;
+    --accent-300: 217.2 32.6% 20%;
+    --accent-400: 217.2 32.6% 25%;
+    --accent-500: 217.2 32.6% 17.5%;
+    --accent-600: 217.2 32.6% 30%;
+    --accent-700: 217.2 32.6% 40%;
+    --accent-800: 217.2 32.6% 50%;
+    --accent-900: 217.2 32.6% 60%;
+    --accent-950: 217.2 32.6% 70%;
 
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 210 40% 98%;
