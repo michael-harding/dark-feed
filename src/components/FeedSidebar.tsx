@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -42,6 +42,7 @@ interface FeedSidebarProps {
   onAddFeed: (url: string) => void;
   onImportFeeds: (feeds: Feed[]) => void;
   onRemoveFeed: (feedId: string) => void;
+  onRenameFeed: (feedId: string, newTitle: string) => void;
   onReorderFeeds: (reorderedFeeds: Feed[]) => void;
   isLoading?: boolean;
 }
@@ -50,9 +51,12 @@ interface FeedSidebarProps {
 interface SortableFeedItemProps {
   feed: Feed;
   onRemove: (feedId: string) => void;
+  onRename: (feedId: string, newTitle: string) => void;
 }
 
-const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
+const SortableFeedItem = ({ feed, onRemove, onRename }: SortableFeedItemProps) => {
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(feed.title);
   const {
     attributes,
     listeners,
@@ -66,6 +70,22 @@ const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+  };
+
+  const handleRename = () => {
+    if (renameValue.trim() && renameValue.trim() !== feed.title) {
+      onRename(feed.id, renameValue.trim());
+    }
+    setIsRenaming(false);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleRename();
+    } else if (e.key === 'Escape') {
+      setRenameValue(feed.title);
+      setIsRenaming(false);
+    }
   };
 
   return (
@@ -86,7 +106,27 @@ const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
         <Rss className="w-4 h-4" />
       </div>
       <div className="flex-1 min-w-0">
-        <p className="font-medium truncate">{feed.title}</p>
+        {isRenaming ? (
+          <div className="flex items-center gap-1">
+            <Input
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              className="h-6 text-sm font-medium flex-1"
+              autoFocus
+            />
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-6 w-6 p-0 hover:bg-accent hover:text-accent-foreground"
+              onClick={handleRename}
+            >
+              <Check className="w-3 h-3" />
+            </Button>
+          </div>
+        ) : (
+          <p className="font-medium truncate">{feed.title}</p>
+        )}
         <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
       </div>
       <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
@@ -104,6 +144,15 @@ const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
+            onClick={() => {
+              setRenameValue(feed.title);
+              setIsRenaming(true);
+            }}
+          >
+            <Edit className="w-4 h-4 mr-2" />
+            Rename Feed
+          </DropdownMenuItem>
+          <DropdownMenuItem
             onClick={() => onRemove(feed.id)}
             className="text-destructive focus:text-destructive"
           >
@@ -116,7 +165,7 @@ const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
   );
 };
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -453,6 +502,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                             key={feed.id}
                             feed={feed}
                             onRemove={onRemoveFeed}
+                            onRename={onRenameFeed}
                           />
                         ))}
                       </SortableContext>

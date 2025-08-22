@@ -370,6 +370,26 @@ const Index = () => {
     });
   };
 
+  const handleRenameFeed = (feedId: string, newTitle: string) => {
+    setFeeds(prev => prev.map(feed => 
+      feed.id === feedId 
+        ? { ...feed, title: newTitle }
+        : feed
+    ));
+    
+    // Also update the feedTitle in all articles from this feed
+    setArticles(prev => prev.map(article => 
+      article.feedId === feedId 
+        ? { ...article, feedTitle: newTitle }
+        : article
+    ));
+    
+    toast({
+      title: "Feed Renamed",
+      description: `Feed renamed to "${newTitle}".`,
+    });
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   console.log('Rendering Index component', { 
@@ -407,6 +427,7 @@ const Index = () => {
         onAddFeed={handleAddFeed}
         onImportFeeds={handleImportFeeds}
         onRemoveFeed={handleRemoveFeed}
+        onRenameFeed={handleRenameFeed}
         onReorderFeeds={handleReorderFeeds}
         isLoading={isLoading}
       />
