@@ -362,6 +362,14 @@ const Index = () => {
     });
   };
 
+  const handleReorderFeeds = (reorderedFeeds: Feed[]) => {
+    setFeeds(reorderedFeeds);
+    toast({
+      title: "Feeds Reordered",
+      description: "Feed order has been updated.",
+    });
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   console.log('Rendering Index component', { 
@@ -399,6 +407,7 @@ const Index = () => {
         onAddFeed={handleAddFeed}
         onImportFeeds={handleImportFeeds}
         onRemoveFeed={handleRemoveFeed}
+        onReorderFeeds={handleReorderFeeds}
         isLoading={isLoading}
       />
 

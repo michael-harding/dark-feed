@@ -1,5 +1,24 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical } from 'lucide-react';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import {
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,15 +41,82 @@ interface FeedSidebarProps {
   onAddFeed: (url: string) => void;
   onImportFeeds: (feeds: Feed[]) => void;
   onRemoveFeed: (feedId: string) => void;
+  onReorderFeeds: (reorderedFeeds: Feed[]) => void;
   isLoading?: boolean;
 }
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, isLoading = false }: FeedSidebarProps) => {
+// Sortable Feed Item Component
+interface SortableFeedItemProps {
+  feed: Feed;
+  onRemove: (feedId: string) => void;
+}
+
+const SortableFeedItem = ({ feed, onRemove }: SortableFeedItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: feed.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-center gap-3 p-3 border rounded-lg bg-card"
+    >
+      <button
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing p-1 hover:bg-muted rounded transition-colors"
+        aria-label="Drag to reorder"
+      >
+        <GripVertical className="w-4 h-4 text-muted-foreground" />
+      </button>
+      <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
+        <Rss className="w-4 h-4" />
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium truncate">{feed.title}</p>
+        <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+      </div>
+      <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
+        {feed.unreadCount}
+      </Badge>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={() => onRemove(feed.id)}
+        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+      >
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </div>
+  );
+};
+
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [accentColor, setAccentColor] = useState('46 87% 65%'); // Default yellow accent
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Drag and drop sensors
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   // Predefined accent colors
   const accentColors = [
@@ -124,6 +210,19 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     // Reset the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
+    }
+  };
+
+  // Handle drag end event
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = feeds.findIndex((feed) => feed.id === active.id);
+      const newIndex = feeds.findIndex((feed) => feed.id === over.id);
+      
+      const reorderedFeeds = arrayMove(feeds, oldIndex, newIndex);
+      onReorderFeeds(reorderedFeeds);
     }
   };
 
@@ -324,38 +423,28 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
               {/* Manage Feeds Section */}
               <div>
                 <h3 className="text-sm font-medium text-foreground mb-3">Manage Feeds</h3>
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                {feeds.length === 0 ? (
-                  <p className="text-sm text-muted-foreground p-4 text-center">
-                    No feeds added yet. Add a feed to get started.
-                  </p>
-                ) : (
-                  feeds.map((feed) => (
-                    <div
-                      key={feed.id}
-                      className="flex items-center gap-3 p-3 border rounded-lg bg-card"
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {feeds.length === 0 ? (
+                    <p className="text-sm text-muted-foreground p-4 text-center">
+                      No feeds added yet. Add a feed to get started.
+                    </p>
+                  ) : (
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
                     >
-                      <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center flex-shrink-0">
-                        <Rss className="w-4 h-4" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{feed.title}</p>
-                        <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
-                      </div>
-                      <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
-                        {feed.unreadCount}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => onRemoveFeed(feed.id)}
-                        className="h-8 w-8 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
-                  ))
-                )}
+                      <SortableContext items={feeds.map(feed => feed.id)} strategy={verticalListSortingStrategy}>
+                        {feeds.map((feed) => (
+                          <SortableFeedItem
+                            key={feed.id}
+                            feed={feed}
+                            onRemove={onRemoveFeed}
+                          />
+                        ))}
+                      </SortableContext>
+                    </DndContext>
+                  )}
                 </div>
               </div>
             </div>
