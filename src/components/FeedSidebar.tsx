@@ -373,7 +373,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                   <Button 
                     onClick={handleAddFeed} 
                     size="sm" 
-                    className="w-full"
+                    className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                     disabled={isLoading || !newFeedUrl.trim()}
                   >
                     <Plus className="w-4 h-4 mr-2" />
