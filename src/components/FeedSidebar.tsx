@@ -208,9 +208,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       setAccentColor(saved);
       updateAccentColor(saved);
     }
-    
+
     // Initialize favicon generator
-    faviconGenerator.loadBaseImage().catch(console.error);
+  // faviconGenerator.loadBaseImage() removed; SVG favicon logic is now used.
   }, []);
 
   // Update CSS variables when accent color changes
@@ -220,12 +220,12 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     const h = parseInt(hue);
     const s = parseInt(saturation.replace('%', ''));
     const l = parseInt(lightness.replace('%', ''));
-    
+
     // Update main accent color
     document.documentElement.style.setProperty('--accent', color);
     document.documentElement.style.setProperty('--ring', color);
     document.documentElement.style.setProperty('--feed-unread', color);
-    
+
     // Generate and update all accent shades
     const shades = [
       { name: '50', lightness: Math.min(95, l + 30) },
@@ -240,7 +240,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       { name: '900', lightness: Math.max(25, l - 40) },
       { name: '950', lightness: Math.max(15, l - 50) },
     ];
-    
+
     shades.forEach(shade => {
       const shadeColor = `${h} ${s}% ${shade.lightness}%`;
       document.documentElement.style.setProperty(`--accent-${shade.name}`, shadeColor);
@@ -251,7 +251,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     setAccentColor(color);
     updateAccentColor(color);
     localStorage.setItem('rss-accent-color', color);
-    
+
     // Update favicon to match new accent color
     faviconGenerator.generateAndUpdateFavicon(color);
   };
@@ -272,7 +272,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       exportedAt: new Date().toISOString(),
       version: '1.0'
     };
-    
+
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -293,7 +293,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       try {
         const content = e.target?.result as string;
         const importData = JSON.parse(content);
-        
+
         if (importData.feeds && Array.isArray(importData.feeds)) {
           onImportFeeds(importData.feeds);
         } else {
@@ -304,7 +304,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
       }
     };
     reader.readAsText(file);
-    
+
     // Reset the input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -318,7 +318,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     if (over && active.id !== over.id) {
       const oldIndex = feeds.findIndex((feed) => feed.id === active.id);
       const newIndex = feeds.findIndex((feed) => feed.id === over.id);
-      
+
       const reorderedFeeds = arrayMove(feeds, oldIndex, newIndex);
       onReorderFeeds(reorderedFeeds);
     }
@@ -365,7 +365,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
               </Badge>
             )}
           </button>
-          
+
           <button
             onClick={() => onFeedSelect('starred')}
             className={cn(
@@ -376,7 +376,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
             <Star className="w-4 h-4" />
             <span className="flex-1 text-left">Starred</span>
           </button>
-          
+
           <button
             onClick={() => onFeedSelect('bookmarks')}
             className={cn(
@@ -444,7 +444,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                   <Rss className="w-4 h-4" />
                   Feed Management
                 </h3>
-                
+
                 {/* Add Feed Form */}
                 <div className="space-y-3 mb-4 p-4 border rounded-lg bg-muted/30">
                   <label className="text-sm font-medium">Add New Feed</label>
@@ -455,9 +455,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                     onKeyDown={(e) => e.key === 'Enter' && handleAddFeed()}
                     className="bg-background"
                   />
-                  <Button 
-                    onClick={handleAddFeed} 
-                    size="sm" 
+                  <Button
+                    onClick={handleAddFeed}
+                    size="sm"
                     className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
                     disabled={isLoading || !newFeedUrl.trim()}
                   >
@@ -468,9 +468,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
 
                 {/* Import/Export */}
                 <div className="flex gap-2 mb-4">
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1"
                     onClick={handleExportFeeds}
                     disabled={feeds.length === 0}
@@ -478,9 +478,9 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                     <Download className="w-4 h-4 mr-2" />
                     Export Feeds
                   </Button>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
+                  <Button
+                    variant="outline"
+                    size="sm"
                     className="flex-1"
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -503,12 +503,12 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                       onClick={() => handleAccentColorChange(color.value)}
                       className={cn(
                         "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
-                        accentColor === color.value 
-                          ? "border-accent bg-accent/10" 
+                        accentColor === color.value
+                          ? "border-accent bg-accent/10"
                           : "border-border hover:border-accent/50"
                       )}
                     >
-                      <div 
+                      <div
                         className="w-8 h-8 rounded-full border-2 border-white/20"
                         style={{ backgroundColor: color.hex }}
                       />

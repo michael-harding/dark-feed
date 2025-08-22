@@ -71,17 +71,17 @@ const fetchRSSFeed = async (url: string): Promise<any> => {
     // Use RSS2JSON API which is browser-compatible
     const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
     const response = await fetch(apiUrl);
-    
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
-    
+
     const data = await response.json();
-    
+
     if (data.status !== 'ok') {
       throw new Error(data.message || 'Failed to parse RSS feed');
     }
-    
+
     return data;
   } catch (error) {
     console.error('Error fetching RSS feed:', error);
@@ -117,12 +117,12 @@ const Index = () => {
       const h = parseInt(hue);
       const s = parseInt(saturation.replace('%', ''));
       const l = parseInt(lightness.replace('%', ''));
-      
+
       // Update main accent color
       document.documentElement.style.setProperty('--accent', saved);
       document.documentElement.style.setProperty('--ring', saved);
       document.documentElement.style.setProperty('--feed-unread', saved);
-      
+
       // Generate and update all accent shades
       const shades = [
         { name: '50', lightness: Math.min(95, l + 30) },
@@ -137,10 +137,15 @@ const Index = () => {
         { name: '900', lightness: Math.max(25, l - 40) },
         { name: '950', lightness: Math.max(15, l - 50) },
       ];
-      
+
       shades.forEach(shade => {
         const shadeColor = `${h} ${s}% ${shade.lightness}%`;
         document.documentElement.style.setProperty(`--accent-${shade.name}`, shadeColor);
+      });
+
+      // Update favicon color on page load
+      import('@/utils/faviconGenerator').then(({ faviconGenerator }) => {
+        faviconGenerator.generateAndUpdateFavicon(saved);
       });
     }
   }, []);
@@ -161,25 +166,25 @@ const Index = () => {
         setInitialLoading(false);
         return;
       }
-      
+
       setIsLoading(true);
       console.log('Refreshing feeds on page load...');
-      
+
       const currentFeedArticleUrls = new Set<string>();
-      
+
       try {
         // First, refresh feeds and collect current article URLs
         for (const feed of feeds) {
           try {
             const data = await fetchRSSFeed(feed.url);
-            
+
             // Collect URLs of current articles in the feed
             data.items?.forEach((item: any) => {
               if (item.link) {
                 currentFeedArticleUrls.add(item.link);
               }
             });
-            
+
             // Convert RSS items to articles
             const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
               id: `${feed.id}-${Date.now()}-${index}`,
@@ -200,27 +205,27 @@ const Index = () => {
             setArticles(prev => {
               const existingUrls = prev.map(a => a.url);
               const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
-              
+
               if (uniqueNewArticles.length > 0) {
                 console.log(`Found ${uniqueNewArticles.length} new articles for ${feed.title}`);
-                
+
                 // Update feed unread count
-                setFeeds(prevFeeds => prevFeeds.map(f => 
-                  f.id === feed.id 
+                setFeeds(prevFeeds => prevFeeds.map(f =>
+                  f.id === feed.id
                     ? { ...f, unreadCount: f.unreadCount + uniqueNewArticles.length }
                     : f
                 ));
-                
+
                 return [...prev, ...uniqueNewArticles];
               }
-              
+
               return prev;
             });
           } catch (error) {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
           }
         }
-        
+
         // After refreshing all feeds, clean up read articles older than 48 hours
         // that are no longer present in any feed
         const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
@@ -230,18 +235,18 @@ const Index = () => {
             // 1. It's not read, OR
             // 2. It's newer than 48 hours, OR
             // 3. It's still present in the current feed data
-            return !article.isRead || 
-                   article.publishedAt > fortyEightHoursAgo || 
+            return !article.isRead ||
+                   article.publishedAt > fortyEightHoursAgo ||
                    currentFeedArticleUrls.has(article.url);
           });
-          
+
           const removedCount = prev.length - filteredArticles.length;
           if (removedCount > 0) {
             console.log(`Cleaned up ${removedCount} old read articles that are no longer in feeds`);
           }
           return filteredArticles;
         });
-        
+
         toast({
           title: "Feeds Refreshed",
           description: "Checked for new articles",
@@ -261,7 +266,7 @@ const Index = () => {
   useEffect(() => {
     console.log('Filtering articles, selectedFeed:', selectedFeed, 'articles length:', articles.length);
     let filtered: Article[] = [];
-    
+
     if (selectedFeed === 'all') {
       filtered = articles;
     } else if (selectedFeed === 'starred') {
@@ -271,10 +276,10 @@ const Index = () => {
     } else {
       filtered = articles.filter(article => article.feedId === selectedFeed);
     }
-    
+
     // Sort by publishedAt date, newest first
     filtered.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-    
+
     setFilteredArticles(filtered);
   }, [selectedFeed, articles]);
 
@@ -283,7 +288,7 @@ const Index = () => {
     try {
       const data = await fetchRSSFeed(url);
       const feedId = Date.now().toString();
-      
+
       const newFeed: Feed = {
         id: feedId,
         title: data.feed?.title || 'Unknown Feed',
@@ -309,7 +314,7 @@ const Index = () => {
 
       setFeeds(prev => [...prev, newFeed]);
       setArticles(prev => [...prev, ...newArticles]);
-      
+
       toast({
         title: "Feed Added",
         description: `Successfully added ${data.feed?.title || url}`,
@@ -326,24 +331,24 @@ const Index = () => {
   };
 
   const handleToggleStar = (articleId: string) => {
-    setArticles(prev => prev.map(article => 
-      article.id === articleId 
+    setArticles(prev => prev.map(article =>
+      article.id === articleId
         ? { ...article, isStarred: !article.isStarred }
         : article
     ));
   };
 
   const handleToggleBookmark = (articleId: string) => {
-    setArticles(prev => prev.map(article => 
-      article.id === articleId 
+    setArticles(prev => prev.map(article =>
+      article.id === articleId
         ? { ...article, isBookmarked: !article.isBookmarked }
         : article
     ));
   };
 
   const handleMarkAsRead = (articleId: string) => {
-    setArticles(prev => prev.map(article => 
-      article.id === articleId 
+    setArticles(prev => prev.map(article =>
+      article.id === articleId
         ? { ...article, isRead: true }
         : article
     ));
@@ -351,8 +356,8 @@ const Index = () => {
     // Update feed unread count
     const article = articles.find(a => a.id === articleId);
     if (article && !article.isRead) {
-      setFeeds(prev => prev.map(feed => 
-        feed.id === article.feedId 
+      setFeeds(prev => prev.map(feed =>
+        feed.id === article.feedId
           ? { ...feed, unreadCount: Math.max(0, feed.unreadCount - 1) }
           : feed
       ));
@@ -363,7 +368,7 @@ const Index = () => {
     // Filter out feeds that already exist (by URL)
     const existingUrls = feeds.map(f => f.url);
     const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
-    
+
     if (newFeeds.length === 0) {
       toast({
         title: "No New Feeds",
@@ -374,7 +379,7 @@ const Index = () => {
 
     // Add the new feeds
     setFeeds(prev => [...prev, ...newFeeds]);
-    
+
     toast({
       title: "Feeds Imported",
       description: `Successfully imported ${newFeeds.length} new feed(s).`,
@@ -384,15 +389,15 @@ const Index = () => {
   const handleRemoveFeed = (feedId: string) => {
     // Remove the feed
     setFeeds(prev => prev.filter(feed => feed.id !== feedId));
-    
+
     // Remove all articles from this feed
     setArticles(prev => prev.filter(article => article.feedId !== feedId));
-    
+
     // If the removed feed was selected, switch to "all"
     if (selectedFeed === feedId) {
       setSelectedFeed('all');
     }
-    
+
     toast({
       title: "Feed Removed",
       description: "Feed and its articles have been removed.",
@@ -408,19 +413,19 @@ const Index = () => {
   };
 
   const handleRenameFeed = (feedId: string, newTitle: string) => {
-    setFeeds(prev => prev.map(feed => 
-      feed.id === feedId 
+    setFeeds(prev => prev.map(feed =>
+      feed.id === feedId
         ? { ...feed, title: newTitle }
         : feed
     ));
-    
+
     // Also update the feedTitle in all articles from this feed
-    setArticles(prev => prev.map(article => 
-      article.feedId === feedId 
+    setArticles(prev => prev.map(article =>
+      article.feedId === feedId
         ? { ...article, feedTitle: newTitle }
         : article
     ));
-    
+
     toast({
       title: "Feed Renamed",
       description: `Feed renamed to "${newTitle}".`,
@@ -429,19 +434,19 @@ const Index = () => {
 
   const handleMarkAllAsRead = (feedId: string) => {
     // Mark all articles from this feed as read
-    setArticles(prev => prev.map(article => 
+    setArticles(prev => prev.map(article =>
       article.feedId === feedId && !article.isRead
         ? { ...article, isRead: true }
         : article
     ));
-    
+
     // Reset the feed's unread count to 0
-    setFeeds(prev => prev.map(feed => 
-      feed.id === feedId 
+    setFeeds(prev => prev.map(feed =>
+      feed.id === feedId
         ? { ...feed, unreadCount: 0 }
         : feed
     ));
-    
+
     const feed = feeds.find(f => f.id === feedId);
     toast({
       title: "Articles Marked as Read",
@@ -451,12 +456,12 @@ const Index = () => {
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
-  console.log('Rendering Index component', { 
-    feedsLength: feeds.length, 
-    articlesLength: articles.length, 
+  console.log('Rendering Index component', {
+    feedsLength: feeds.length,
+    articlesLength: articles.length,
     filteredArticlesLength: filteredArticles.length,
     selectedFeed,
-    selectedArticle 
+    selectedArticle
   });
 
   if (initialLoading) {
