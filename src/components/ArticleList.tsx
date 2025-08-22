@@ -17,6 +17,7 @@ interface Article {
   isStarred: boolean;
   isBookmarked: boolean;
   author?: string;
+  sortOrder: number;
 }
 
 interface ArticleListProps {
@@ -40,16 +41,8 @@ export const ArticleList = ({
   sortMode,
   onToggleSortMode
 }: ArticleListProps) => {
-  // Sort articles according to sortMode
-  let sortedArticles = [...articles];
-  if (sortMode === 'chronological') {
-    sortedArticles.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-  } else {
-    sortedArticles.sort((a, b) => {
-      if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-      return b.publishedAt.getTime() - a.publishedAt.getTime();
-    });
-  }
+  // // Sort articles according to sortMode
+  let sortedArticles = [...articles].sort((a, b) => a.sortOrder - b.sortOrder);
   return (
     <div className="w-96 bg-article-bg border-r border-border flex flex-col h-screen">
       {/* Header */}

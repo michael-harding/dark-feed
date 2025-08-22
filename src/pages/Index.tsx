@@ -6,8 +6,6 @@ import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
 import heroImage from '@/assets/rss-hero.jpg';
 
-// Add basic error logging
-console.log('Index page loading...');
 
 interface Feed {
   id: string;
@@ -30,6 +28,7 @@ interface Article {
   isStarred: boolean;
   isBookmarked: boolean;
   author?: string;
+  sortOrder: number;
 }
 
 // Local storage keys
@@ -93,13 +92,12 @@ const Index = () => {
   // Load from localStorage or use empty arrays as defaults
   const [feeds, setFeeds] = useState<Feed[]>(() => {
     const stored = loadFromStorage(FEEDS_KEY, []);
-    console.log('Loaded feeds from storage:', stored);
     return stored;
   });
   const [articles, setArticles] = useState<Article[]>(() => {
     const stored = loadFromStorage(ARTICLES_KEY, []);
-    console.log('Loaded articles from storage:', stored);
-    return stored;
+    // Add sortOrder property if missing
+    return stored.map((a: any, i: number) => ({ ...a, sortOrder: i }));
   });
   const [selectedFeed, setSelectedFeed] = useState<string | null>('all');
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
@@ -169,7 +167,6 @@ const Index = () => {
       }
 
       setIsLoading(true);
-      console.log('Refreshing feeds on page load...');
 
       const currentFeedArticleUrls = new Set<string>();
 
@@ -264,6 +261,20 @@ const Index = () => {
   }, []); // Only run on initial page load
 
   // Filter articles based on selected feed
+  // Helper to set sortOrder for articles
+  const setSortOrderForArticles = (articles: Article[], mode: 'chronological' | 'unreadOnTop') => {
+    let sorted = [...articles];
+    if (mode === 'chronological') {
+      sorted.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    } else {
+      sorted.sort((a, b) => {
+        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+        return b.publishedAt.getTime() - a.publishedAt.getTime();
+      });
+    }
+    return sorted.map((a, i) => ({ ...a, sortOrder: i }));
+  };
+
   useEffect(() => {
     let filtered: Article[] = [];
     if (selectedFeed === 'all') {
@@ -276,17 +287,17 @@ const Index = () => {
       filtered = articles.filter(article => article.feedId === selectedFeed);
     }
 
-    if (sortMode === 'chronological') {
-      filtered.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-    } else {
-      // Unread on top, then newest first
-      filtered.sort((a, b) => {
-        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return b.publishedAt.getTime() - a.publishedAt.getTime();
-      });
-    }
-    setFilteredArticles(filtered);
-  }, [selectedFeed, articles, sortMode]);
+    // Set sortOrder for filtered articles
+    const withOrder = setSortOrderForArticles(filtered, sortMode);
+    setFilteredArticles(withOrder);
+  }, [selectedFeed, sortMode]);
+
+
+  useEffect(() => {
+    // When articles change, sort by sortOrder
+    setFilteredArticles(prev => [...prev].sort((a, b) => a.sortOrder - b.sortOrder));
+  }, [articles]);
+
 
   const handleAddFeed = async (url: string) => {
     setIsLoading(true);
@@ -352,11 +363,15 @@ const Index = () => {
   };
 
   const handleMarkAsRead = (articleId: string) => {
-    setArticles(prev => prev.map(article =>
-      article.id === articleId
+    setArticles(prev => prev.map(article => article.id === articleId
         ? { ...article, isRead: !article.isRead }
         : article
-    ));
+  ));
+
+  setFilteredArticles(prev => prev.map(article => article.id === articleId
+        ? { ...article, isRead: !article.isRead }
+        : article
+  ));
 
     // Update feed unread count
     const article = articles.find(a => a.id === articleId);
@@ -463,14 +478,6 @@ const Index = () => {
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
-  console.log('Rendering Index component', {
-    feedsLength: feeds.length,
-    articlesLength: articles.length,
-    filteredArticlesLength: filteredArticles.length,
-    selectedFeed,
-    selectedArticle
-  });
-
   if (initialLoading) {
     return (
       <div className="h-screen bg-background flex items-center justify-center">
@@ -513,7 +520,14 @@ const Index = () => {
         onToggleBookmark={handleToggleBookmark}
         onMarkAsRead={handleMarkAsRead}
         sortMode={sortMode}
-        onToggleSortMode={() => setSortMode(m => m === 'chronological' ? 'unreadOnTop' : 'chronological')}
+        onToggleSortMode={() => {
+          setSortMode(m => {
+            const newMode = m === 'chronological' ? 'unreadOnTop' : 'chronological';
+            // Update sortOrder for all articles
+            setArticles(prev => setSortOrderForArticles(prev, newMode));
+            return newMode;
+          });
+        }}
       />
 
       {/* Article Reader */}
