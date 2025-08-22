@@ -33,7 +33,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
         <div className="text-center max-w-md mx-auto p-8">
           <div className="w-24 h-24 bg-muted rounded-full flex items-center justify-center mx-auto mb-6">
             <div className="w-12 h-12 bg-primary/20 rounded-full flex items-center justify-center">
-              <div className="w-6 h-6 bg-primary rounded-full"></div>
+              <div className="w-6 h-6 bg-accent-500 rounded-full"></div>
             </div>
           </div>
           <h3 className="text-xl font-semibold text-foreground mb-2">
