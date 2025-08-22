@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">
+  <defs>
+    <style>
+      .accent { fill: hsl(46, 87%, 65%); }
+      .bg { fill: hsl(240, 10%, 3.9%); }
+    </style>
+  </defs>
+  
+  <!-- Background rounded rectangle -->
+  <rect x="2" y="2" width="28" height="28" rx="6" ry="6" class="bg"/>
+  
+  <!-- RSS icon -->
+  <g transform="translate(4, 4)">
+    <!-- RSS dot -->
+    <circle cx="6" cy="18" r="3" class="accent"/>
+    
+    <!-- RSS arcs -->
+    <path d="M3 9a12 12 0 0 1 12 12" stroke="hsl(46, 87%, 65%)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+    <path d="M3 3a18 18 0 0 1 18 18" stroke="hsl(46, 87%, 65%)" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+  </g>
+</svg>
