@@ -104,6 +104,7 @@ const Index = () => {
   const [selectedFeed, setSelectedFeed] = useState<string | null>('all');
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
+  const [sortMode, setSortMode] = useState<'chronological' | 'unreadOnTop'>('chronological');
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const { toast } = useToast();
@@ -264,9 +265,7 @@ const Index = () => {
 
   // Filter articles based on selected feed
   useEffect(() => {
-    console.log('Filtering articles, selectedFeed:', selectedFeed, 'articles length:', articles.length);
     let filtered: Article[] = [];
-
     if (selectedFeed === 'all') {
       filtered = articles;
     } else if (selectedFeed === 'starred') {
@@ -277,11 +276,17 @@ const Index = () => {
       filtered = articles.filter(article => article.feedId === selectedFeed);
     }
 
-    // Sort by publishedAt date, newest first
-    filtered.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-
+    if (sortMode === 'chronological') {
+      filtered.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+    } else {
+      // Unread on top, then newest first
+      filtered.sort((a, b) => {
+        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+        return b.publishedAt.getTime() - a.publishedAt.getTime();
+      });
+    }
     setFilteredArticles(filtered);
-  }, [selectedFeed, articles]);
+  }, [selectedFeed, articles, sortMode]);
 
   const handleAddFeed = async (url: string) => {
     setIsLoading(true);
@@ -505,6 +510,8 @@ const Index = () => {
         onToggleStar={handleToggleStar}
         onToggleBookmark={handleToggleBookmark}
         onMarkAsRead={handleMarkAsRead}
+        sortMode={sortMode}
+        onToggleSortMode={() => setSortMode(m => m === 'chronological' ? 'unreadOnTop' : 'chronological')}
       />
 
       {/* Article Reader */}

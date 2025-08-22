@@ -26,6 +26,8 @@ interface ArticleListProps {
   onToggleStar: (articleId: string) => void;
   onToggleBookmark: (articleId: string) => void;
   onMarkAsRead: (articleId: string) => void;
+  sortMode: 'chronological' | 'unreadOnTop';
+  onToggleSortMode: () => void;
 }
 
 export const ArticleList = ({
@@ -34,16 +36,37 @@ export const ArticleList = ({
   onArticleSelect,
   onToggleStar,
   onToggleBookmark,
-  onMarkAsRead
+  onMarkAsRead,
+  sortMode,
+  onToggleSortMode
 }: ArticleListProps) => {
+  // Sort articles according to sortMode
+  let sortedArticles = [...articles];
+  if (sortMode === 'chronological') {
+    sortedArticles.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+  } else {
+    sortedArticles.sort((a, b) => {
+      if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
+      return b.publishedAt.getTime() - a.publishedAt.getTime();
+    });
+  }
   return (
     <div className="w-96 bg-article-bg border-r border-border flex flex-col h-screen">
       {/* Header */}
-      <div className="p-6 border-b border-border">
-        <h2 className="text-xl font-semibold text-foreground">Articles</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          {articles.filter(a => !a.isRead).length} unread of {articles.length} total
-        </p>
+      <div className="p-6 border-b border-border flex items-center justify-between">
+        <div>
+          <h2 className="text-xl font-semibold text-foreground">Articles</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            {articles.filter(a => !a.isRead).length} unread of {articles.length} total
+          </p>
+        </div>
+        <button
+          className="ml-auto px-3 py-1 rounded text-xs bg-muted-foreground text-background hover:bg-accent-700 transition"
+          onClick={onToggleSortMode}
+          title={sortMode === 'chronological' ? 'Show unread on top' : 'Show chronological'}
+        >
+          {sortMode === 'chronological' ? 'Chronological' : 'Unread on Top'}
+        </button>
       </div>
 
       {/* Articles List */}
@@ -57,7 +80,7 @@ export const ArticleList = ({
           </div>
         ) : (
           <div className="divide-y divide-border">
-            {articles.map((article) => (
+            {sortedArticles.map((article) => (
               <div
                 key={article.id}
                 className={cn(
