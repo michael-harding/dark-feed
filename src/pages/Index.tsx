@@ -4,7 +4,6 @@ import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
-const toast = typeof window !== 'undefined' && window.__TOAST__ ? window.__TOAST__ : undefined;
 import heroImage from '@/assets/rss-hero.jpg';
 
 
@@ -38,8 +37,6 @@ const ARTICLES_KEY = 'rss-reader-articles';
 
 // Helper functions for localStorage
 const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
-  // Use toast from useToast if available
-  const showToast = toast || ((msg: any) => {});
   try {
     const stored = localStorage.getItem(key);
     if (stored) {
@@ -55,27 +52,15 @@ const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
     }
   } catch (error) {
     console.error(`Error loading ${key} from localStorage:`, error);
-  showToast({
-      title: 'LocalStorage Error',
-      description: String(error),
-      variant: 'destructive',
-    });
   }
   return defaultValue;
 };
 
 const saveToStorage = <T,>(key: string, value: T): void => {
-  // Use toast from useToast if available
-  const showToast = toast || ((msg: any) => {});
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
     console.error(`Error saving ${key} to localStorage:`, error);
-  showToast({
-      title: 'LocalStorage Error',
-      description: String(error),
-      variant: 'destructive',
-    });
   }
 };
 
@@ -120,13 +105,6 @@ const fetchRSSFeed = async (url: string): Promise<any> => {
     return data;
   } catch (error) {
     console.error('Error fetching RSS feed:', error);
-    // Use toast from useToast if available
-    const showToast = toast || ((msg: any) => {});
-    showToast({
-      title: 'RSS Fetch Error',
-      description: String(error),
-      variant: 'destructive',
-    });
     throw error;
   }
 };
