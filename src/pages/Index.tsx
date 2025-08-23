@@ -256,10 +256,15 @@ const Index = () => {
             // Keep article if:
             // 1. It's not read, OR
             // 2. It's newer than 48 hours, OR
-            // 3. It's still present in the current feed data
-            return !article.isRead ||
-                   article.publishedAt > fortyEightHoursAgo ||
-                   currentFeedArticleUrls.has(article.url);
+            // 3. It's still present in the current feed data, OR
+            // 4. It's starred or bookmarked
+            return (
+              !article.isRead ||
+              article.publishedAt > fortyEightHoursAgo ||
+              currentFeedArticleUrls.has(article.url) ||
+              article.isStarred ||
+              article.isBookmarked
+            );
           });
 
           const removedCount = prev.length - filteredArticles.length;
