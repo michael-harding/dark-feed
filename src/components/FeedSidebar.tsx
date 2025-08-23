@@ -129,7 +129,7 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
         ) : (
           <p className="font-medium truncate">{feed.title}</p>
         )}
-        <p className="text-xs text-muted-foreground truncate">{feed.url}</p>
+        <p className="text-xs text-muted-foreground truncate max-w-96">{feed.url}</p>
       </div>
       <Badge variant="secondary" className="bg-feed-unread text-primary-foreground">
         {feed.unreadCount}
