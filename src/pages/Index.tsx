@@ -357,31 +357,35 @@ const Index = () => {
   };
 
   const handleToggleStar = (articleId: string) => {
-    setArticles(prev => prev.map(article =>
+    const updateFunc = prev => prev.map(article =>
       article.id === articleId
         ? { ...article, isStarred: !article.isStarred }
         : article
-    ));
+    );
+
+    setArticles(updateFunc);
+    setFilteredArticles(updateFunc);
   };
 
   const handleToggleBookmark = (articleId: string) => {
-    setArticles(prev => prev.map(article =>
+    const updateFunc = prev => prev.map(article =>
       article.id === articleId
         ? { ...article, isBookmarked: !article.isBookmarked }
         : article
-    ));
+    );
+
+    setArticles(updateFunc);
+    setFilteredArticles(updateFunc);
   };
 
   const handleMarkAsRead = (articleId: string) => {
-    setArticles(prev => prev.map(article => article.id === articleId
+    const updateFunc = (prev => prev.map(article => article.id === articleId
         ? { ...article, isRead: !article.isRead }
         : article
-  ));
+    ));
 
-  setFilteredArticles(prev => prev.map(article => article.id === articleId
-        ? { ...article, isRead: !article.isRead }
-        : article
-  ));
+    setArticles(updateFunc);
+    setFilteredArticles(updateFunc);
 
     // Update feed unread count
     const article = articles.find(a => a.id === articleId);
