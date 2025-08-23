@@ -66,6 +66,16 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 
 // RSS parsing functions using RSS2JSON API
 const fetchRSSFeed = async (url: string): Promise<any> => {
+  // Disable RSS fetching on development server
+  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+    console.warn('RSS feed fetching is disabled on the development server.');
+    // Return mock data or empty feed
+    return {
+      status: 'disabled',
+      feed: { title: 'Development Feed (disabled)' },
+      items: []
+    };
+  }
   try {
     // Use RSS2JSON API which is browser-compatible
     const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
