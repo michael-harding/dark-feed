@@ -112,7 +112,10 @@ const Index = () => {
   const [selectedFeed, setSelectedFeed] = useState<string | null>('all');
   const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
   const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
-  const [sortMode, setSortMode] = useState<'chronological' | 'unreadOnTop'>('chronological');
+  const [sortMode, setSortMode] = useState<'chronological' | 'unreadOnTop'>(() => {
+    const saved = localStorage.getItem('rss-sort-mode');
+    return saved === 'unreadOnTop' ? 'unreadOnTop' : 'chronological';
+  });
   const [isLoading, setIsLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const { toast } = useToast();
@@ -537,6 +540,7 @@ const Index = () => {
         onToggleSortMode={() => {
           setSortMode(m => {
             const newMode = m === 'chronological' ? 'unreadOnTop' : 'chronological';
+            localStorage.setItem('rss-sort-mode', newMode);
             // Update sortOrder for all articles
             setArticles(prev => setSortOrderForArticles(prev, newMode));
             return newMode;
