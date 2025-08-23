@@ -4,6 +4,7 @@ import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
+const toast = typeof window !== 'undefined' && window.__TOAST__ ? window.__TOAST__ : undefined;
 import heroImage from '@/assets/rss-hero.jpg';
 
 
@@ -37,6 +38,8 @@ const ARTICLES_KEY = 'rss-reader-articles';
 
 // Helper functions for localStorage
 const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  // Use toast from useToast if available
+  const showToast = toast || ((msg: any) => {});
   try {
     const stored = localStorage.getItem(key);
     if (stored) {
@@ -52,15 +55,27 @@ const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
     }
   } catch (error) {
     console.error(`Error loading ${key} from localStorage:`, error);
+  showToast({
+      title: 'LocalStorage Error',
+      description: String(error),
+      variant: 'destructive',
+    });
   }
   return defaultValue;
 };
 
 const saveToStorage = <T,>(key: string, value: T): void => {
+  // Use toast from useToast if available
+  const showToast = toast || ((msg: any) => {});
   try {
     localStorage.setItem(key, JSON.stringify(value));
   } catch (error) {
     console.error(`Error saving ${key} to localStorage:`, error);
+  showToast({
+      title: 'LocalStorage Error',
+      description: String(error),
+      variant: 'destructive',
+    });
   }
 };
 
@@ -105,6 +120,13 @@ const fetchRSSFeed = async (url: string): Promise<any> => {
     return data;
   } catch (error) {
     console.error('Error fetching RSS feed:', error);
+    // Use toast from useToast if available
+    const showToast = toast || ((msg: any) => {});
+    showToast({
+      title: 'RSS Fetch Error',
+      description: String(error),
+      variant: 'destructive',
+    });
     throw error;
   }
 };
@@ -229,7 +251,10 @@ const Index = () => {
               const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
 
               if (uniqueNewArticles.length > 0) {
-                console.log(`Found ${uniqueNewArticles.length} new articles for ${feed.title}`);
+                toast({
+                  title: 'New Articles',
+                  description: `Found ${uniqueNewArticles.length} new articles for ${feed.title}`,
+                });
 
                 // Update feed unread count
                 setFeeds(prevFeeds => prevFeeds.map(f =>
@@ -245,6 +270,11 @@ const Index = () => {
             });
           } catch (error) {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
+            toast({
+              title: 'Feed Refresh Error',
+              description: `${feed.title}: ${String(error)}`,
+              variant: 'destructive',
+            });
           }
         }
 
@@ -269,7 +299,10 @@ const Index = () => {
 
           const removedCount = prev.length - filteredArticles.length;
           if (removedCount > 0) {
-            console.log(`Cleaned up ${removedCount} old read articles that are no longer in feeds`);
+            toast({
+              title: 'Cleanup',
+              description: `Cleaned up ${removedCount} old read articles that are no longer in feeds`,
+            });
           }
           return filteredArticles;
         });
@@ -280,6 +313,11 @@ const Index = () => {
         });
       } catch (error) {
         console.error('Error refreshing feeds:', error);
+        toast({
+          title: 'Feeds Refresh Error',
+          description: String(error),
+          variant: 'destructive',
+        });
       } finally {
         setIsLoading(false);
         setInitialLoading(false);
