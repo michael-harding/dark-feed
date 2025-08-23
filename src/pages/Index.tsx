@@ -66,15 +66,26 @@ const saveToStorage = <T,>(key: string, value: T): void => {
 
 // RSS parsing functions using RSS2JSON API
 const fetchRSSFeed = async (url: string): Promise<any> => {
-  // Disable RSS fetching on development server
+  // On dev server, limit fetching to 10 minute intervals to prevent 429 errors
   if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    console.warn('RSS feed fetching is disabled on the development server.');
-    // Return mock data or empty feed
-    return {
-      status: 'disabled',
-      feed: { title: 'Development Feed (disabled)' },
-      items: []
-    };
+    const FEED_FETCH_TIMES_KEY = 'rss-feed-fetch-times';
+    let fetchTimes: Record<string, number> = {};
+    try {
+      fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
+    } catch {}
+    const now = Date.now();
+    const lastFetch = fetchTimes[url] || 0;
+    const tenMinutes = 10 * 60 * 1000;
+    if (now - lastFetch < tenMinutes) {
+      console.warn(`RSS feed for ${url} was fetched less than 10 minutes ago. Skipping fetch on dev server to prevent 429 errors`);
+      return {
+        status: 'skipped',
+        feed: { title: 'Development Feed (skipped)' },
+        items: []
+      };
+    }
+    fetchTimes[url] = now;
+    localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
   }
   try {
     // Use RSS2JSON API which is browser-compatible
