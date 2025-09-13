@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { DataLayer, Article } from '@/services/dataLayer';
-import { addFeed, refreshFeed, refreshAllFeeds } from './feedsSlice';
+import { addFeed, refreshFeed, refreshAllFeeds, setFeedUnreadCount } from './feedsSlice';
 
 interface ArticlesState {
   articles: Article[];
@@ -110,33 +110,41 @@ const articlesSlice = createSlice({
       })
       // Handle new articles from refresh feed
       .addCase(refreshFeed.fulfilled, (state, action) => {
-        const { newArticles } = action.payload;
-        const existingUrls = state.articles.map(a => a.url);
-        const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
-        
-        if (uniqueNewArticles.length > 0) {
-          state.articles.push(...uniqueNewArticles);
+        const { newArticles, feed } = action.payload;
+
+        if (newArticles.length > 0) {
+          state.articles.push(...newArticles);
           DataLayer.saveArticles(state.articles);
+
+          // Recalculate unread count for this feed
+          const feedArticles = state.articles.filter(a => a.feedId === feed.id);
+          const unreadCount = feedArticles.filter(a => !a.isRead).length;
+          setFeedUnreadCount({ feedId: feed.id, count: unreadCount });
         }
       })
       // Handle new articles from refresh all feeds
       .addCase(refreshAllFeeds.fulfilled, (state, action) => {
         const results = action.payload;
-        const existingUrls = state.articles.map(a => a.url);
         let totalNewArticles = 0;
+        const affectedFeeds = new Set<string>();
 
-        results.forEach(({ newArticles }) => {
-          const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
-          if (uniqueNewArticles.length > 0) {
-            state.articles.push(...uniqueNewArticles);
-            totalNewArticles += uniqueNewArticles.length;
-            // Update existing URLs set to prevent duplicates within this batch
-            uniqueNewArticles.forEach(article => existingUrls.push(article.url));
+        results.forEach(({ newArticles, feed }) => {
+          if (newArticles.length > 0 && !feed.error) {
+            state.articles.push(...newArticles);
+            totalNewArticles += newArticles.length;
+            affectedFeeds.add(feed.id);
           }
         });
 
         if (totalNewArticles > 0) {
           DataLayer.saveArticles(state.articles);
+
+          // Recalculate unread counts for affected feeds
+          affectedFeeds.forEach(feedId => {
+            const feedArticles = state.articles.filter(a => a.feedId === feedId);
+            const unreadCount = feedArticles.filter(a => !a.isRead).length;
+            setFeedUnreadCount({ feedId, count: unreadCount });
+          });
         }
       });
   },

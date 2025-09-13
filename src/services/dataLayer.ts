@@ -13,7 +13,7 @@ export interface Article {
   description: string;
   content: string;
   url: string;
-  publishedAt: Date;
+  publishedAt: string;
   feedId: string;
   feedTitle: string;
   isRead: boolean;
@@ -37,12 +37,9 @@ export class DataLayer {
       const stored = localStorage.getItem(key);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // Convert date strings back to Date objects for articles
+        // No conversion needed since dates are stored as ISO strings
         if (key === ARTICLES_KEY && Array.isArray(parsed)) {
-          return parsed.map(article => ({
-            ...article,
-            publishedAt: new Date(article.publishedAt)
-          })) as T;
+          return parsed as T;
         }
         return parsed;
       }
@@ -78,6 +75,14 @@ export class DataLayer {
 
   static saveArticles = (articles: Article[]): void => {
     DataLayer.saveToStorage(ARTICLES_KEY, articles);
+  };
+
+  static getExistingArticleUrlsForFeed = (feedId: string): Set<string> => {
+    const articles = DataLayer.loadArticles();
+    const urls = articles
+      .filter(article => article.feedId === feedId)
+      .map(article => article.url);
+    return new Set(urls);
   };
 
   // Settings operations
@@ -120,7 +125,7 @@ export class DataLayer {
       fetchTimes[url] = now;
       localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
     }
-    
+
     try {
       // Use RSS2JSON API which is browser-compatible
       const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
@@ -147,11 +152,11 @@ export class DataLayer {
   static setSortOrderForArticles = (articles: Article[], mode: 'chronological' | 'unreadOnTop'): Article[] => {
     let sorted = [...articles];
     if (mode === 'chronological') {
-      sorted.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
+      sorted.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     } else {
       sorted.sort((a, b) => {
         if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return b.publishedAt.getTime() - a.publishedAt.getTime();
+        return Date.parse(b.publishedAt) - Date.parse(a.publishedAt);
       });
     }
     return sorted.map((a, i) => ({ ...a, sortOrder: i }));
@@ -176,7 +181,7 @@ export class DataLayer {
       description: item.description?.replace(/<[^>]*>/g, '') || '',
       content: item.content || item.description || '',
       url: item.link || '',
-      publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
+      publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
       feedId,
       feedTitle,
       isRead: false,
@@ -197,7 +202,7 @@ export class DataLayer {
       // 4. It's starred or bookmarked
       return (
         !article.isRead ||
-        article.publishedAt > fortyEightHoursAgo ||
+        new Date(article.publishedAt) > fortyEightHoursAgo ||
         currentFeedArticleUrls.has(article.url) ||
         article.isStarred ||
         article.isBookmarked

@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { ExternalLink, Star, Bookmark, Share, ArrowLeft } from 'lucide-react';
+import { parsePublishedDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -10,7 +11,7 @@ interface Article {
   description: string;
   content: string;
   url: string;
-  publishedAt: Date;
+  publishedAt: string;
   feedId: string;
   feedTitle: string;
   isRead: boolean;
@@ -124,7 +125,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
               <span>•</span>
             </>
           )}
-          <span>{formatDistanceToNow(article.publishedAt, { addSuffix: true })}</span>
+          <span>{formatDistanceToNow(parsePublishedDate(article.publishedAt), { addSuffix: true })}</span>
         </div>
       </div>
 

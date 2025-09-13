@@ -37,8 +37,10 @@ export const refreshFeed = createAsyncThunk(
   'feeds/refreshFeed',
   async (feed: Feed) => {
     const data = await DataLayer.fetchRSSFeed(feed.url);
-    const newArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
-    return { feed, newArticles };
+    const allNewArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
+    const existingUrls = DataLayer.getExistingArticleUrlsForFeed(feed.id);
+    const uniqueNewArticles = allNewArticles.filter(article => !existingUrls.has(article.url));
+    return { feed, newArticles: uniqueNewArticles, newCount: uniqueNewArticles.length };
   }
 );
 
@@ -49,10 +51,12 @@ export const refreshAllFeeds = createAsyncThunk(
     for (const feed of feeds) {
       try {
         const data = await DataLayer.fetchRSSFeed(feed.url);
-        const newArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
-        results.push({ feed, newArticles, error: null });
+        const allNewArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
+        const existingUrls = DataLayer.getExistingArticleUrlsForFeed(feed.id);
+        const uniqueNewArticles = allNewArticles.filter(article => !existingUrls.has(article.url));
+        results.push({ feed, newArticles: uniqueNewArticles, newCount: uniqueNewArticles.length, error: null });
       } catch (error) {
-        results.push({ feed, newArticles: [], error: String(error) });
+        results.push({ feed, newArticles: [], newCount: 0, error: String(error) });
       }
     }
     return results;
@@ -84,6 +88,14 @@ const feedsSlice = createSlice({
       const feed = state.feeds.find(f => f.id === feedId);
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount + delta);
+        DataLayer.saveFeeds(state.feeds);
+      }
+    },
+    setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
+      const { feedId, count } = action.payload;
+      const feed = state.feeds.find(f => f.id === feedId);
+      if (feed) {
+        feed.unreadCount = count;
         DataLayer.saveFeeds(state.feeds);
       }
     },
@@ -148,6 +160,7 @@ export const {
   renameFeed,
   reorderFeeds,
   updateFeedUnreadCount,
+  setFeedUnreadCount,
   importFeeds,
   markAllAsRead,
 } = feedsSlice.actions;
