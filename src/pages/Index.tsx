@@ -42,12 +42,12 @@ const Index = () => {
   // Redux state
   const { feeds, isLoading } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
-  const { 
-    selectedFeed, 
-    selectedArticle, 
-    sortMode, 
-    accentColor, 
-    initialLoading 
+  const {
+    selectedFeed,
+    selectedArticle,
+    sortMode,
+    accentColor,
+    initialLoading
   } = useAppSelector((state) => state.ui);
 
   // Initialize accent color from Redux state
@@ -91,10 +91,10 @@ const Index = () => {
     }
   }, [accentColor]);
 
-  // Update filtered articles when feeds, articles, selectedFeed, or sortMode changes
+  // Update filtered articles when selectedFeed or sortMode changes (stable on read toggles)
   useEffect(() => {
     dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-  }, [dispatch, selectedFeed, sortMode, articles]);
+  }, [dispatch, selectedFeed, sortMode]);
 
   // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
@@ -109,7 +109,7 @@ const Index = () => {
 
         // Refresh all feeds and collect article URLs
         const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
-        
+
         result.forEach(({ newArticles, feed, error }) => {
           if (error) {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
@@ -140,6 +140,9 @@ const Index = () => {
         // Clean up old articles
         dispatch(cleanupOldArticles(currentFeedArticleUrls));
 
+        // Update filtered articles after refresh (to include new ones)
+        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+
         toast({
           title: "Feeds Refreshed",
           description: "Checked for new articles",
@@ -163,6 +166,8 @@ const Index = () => {
   const handleAddFeed = async (url: string) => {
     try {
       const result = await dispatch(addFeed(url)).unwrap();
+      // Update filtered articles to include new feed's articles
+      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
       toast({
         title: "Feed Added",
         description: `Successfully added ${result.feed.title}`,
@@ -208,6 +213,8 @@ const Index = () => {
     }
 
     dispatch(importFeeds(newFeeds));
+    // Update filtered articles to include new feeds' articles
+    dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
     toast({
       title: "Feeds Imported",
       description: `Successfully imported ${newFeeds.length} new feed(s).`,
