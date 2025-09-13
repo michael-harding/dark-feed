@@ -197,11 +197,6 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     { name: 'Teal', value: '173 80% 40%', hex: '#14b8a6' },
   ];
 
-  // Load saved accent color on mount
-  useEffect(() => {
-    // Initialize favicon generator - removed as it's now handled in Redux
-  }, []);
-
   // Update CSS variables when accent color changes
   const updateAccentColor = (color: string) => {
     // Parse the HSL color string (e.g., "46 87% 65%")
@@ -483,7 +478,7 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                   <Palette className="w-4 h-4" />
                   Accent Color
                 </h3>
-                <div className="grid grid-cols-4 gap-3">
+                <div className="grid grid-cols-8 gap-3">
                   {accentColors.map((colorOption) => (
                     <button
                       key={colorOption.name}
@@ -510,12 +505,11 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                 </div>
               </div>
 
-              {/* Feed Reordering Section */}
+              {/* Feed Management Section */}
               {feeds.length > 0 && (
                 <div>
                   <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                    <GripVertical className="w-4 h-4" />
-                    Reorder Feeds
+                    Manage Feeds
                   </h3>
                   <p className="text-xs text-muted-foreground mb-4">
                     Drag feeds to reorder them in the sidebar
