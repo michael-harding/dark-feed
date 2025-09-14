@@ -57,45 +57,52 @@ export const addFeed = createAsyncThunk(
 // Async thunk to import multiple feeds
 export const importFeeds = createAsyncThunk(
   'feeds/importFeeds',
-  async (urls: string[]) => {
+  async (feedsToImport: Feed[]) => {
     const currentFeeds = await DataLayer.loadFeeds();
     const existingUrls = new Set(currentFeeds.map(feed => feed.url));
     
-    const newFeeds: Feed[] = [];
-    const newArticles: Article[] = [];
+    const results: Array<{ articles: Article[]; feed: Feed; error?: string }> = [];
     
-    for (const url of urls) {
-      if (!existingUrls.has(url)) {
+    for (const feed of feedsToImport) {
+      if (!existingUrls.has(feed.url)) {
         try {
-          const data = await DataLayer.fetchRSSFeed(url);
+          const data = await DataLayer.fetchRSSFeed(feed.url);
           
           if (data.status === 'skipped') {
+            results.push({ articles: [], feed, error: 'Feed fetching skipped on development server' });
             continue;
           }
 
-          const feedId = crypto.randomUUID();
+          const feedId = feed.id || crypto.randomUUID();
           const newFeed: Feed = {
             id: feedId,
-            title: data.feed?.title || 'Unknown Feed',
-            url: url,
+            title: data.feed?.title || feed.title || 'Unknown Feed',
+            url: feed.url,
             unreadCount: data.items?.length || 0,
-            category: undefined
+            category: feed.category
           };
 
-          newFeeds.push(newFeed);
           await DataLayer.saveFeed(newFeed);
           
           const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
           const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
             .filter(article => !existingUrls.has(article.url));
-          newArticles.push(...feedArticles);
+          
+          results.push({ articles: feedArticles, feed: newFeed });
         } catch (error) {
-          console.error(`Failed to import feed ${url}:`, error);
+          console.error(`Failed to import feed ${feed.url}:`, error);
+          results.push({ 
+            articles: [], 
+            feed, 
+            error: error instanceof Error ? error.message : 'Unknown error' 
+          });
         }
+      } else {
+        results.push({ articles: [], feed, error: 'Feed already exists' });
       }
     }
     
-    return { newFeeds, newArticles };
+    return results;
   }
 );
 
@@ -261,7 +268,10 @@ const feedsSlice = createSlice({
         state.error = null;
       })
       .addCase(importFeeds.fulfilled, (state, action) => {
-        state.feeds.push(...action.payload.newFeeds);
+        const successfulFeeds = action.payload
+          .filter(result => !result.error && result.articles.length >= 0)
+          .map(result => result.feed);
+        state.feeds.push(...successfulFeeds);
         state.isLoading = false;
       })
       .addCase(importFeeds.rejected, (state, action) => {

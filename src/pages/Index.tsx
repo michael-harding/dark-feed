@@ -257,17 +257,21 @@ const Index = () => {
     }
 
     try {
-      const result = await dispatch(importFeeds(newFeeds)).unwrap();
+      const results = await dispatch(importFeeds(newFeeds)).unwrap();
 
       // Get current articles state to calculate existing articles
       const currentArticles = articles;
 
+      // Separate successful and failed imports
+      const successfulResults = results.filter(result => !result.error);
+      const failedResults = results.filter(result => result.error);
+
       // Calculate correct unread counts for imported feeds
-      result.forEach(({ articles, feed }) => {
-        if (articles.length > 0) {
+      successfulResults.forEach(({ articles: newArticles, feed }) => {
+        if (newArticles.length > 0) {
           // Get all articles for this feed (existing + new)
           const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const newFeedArticles = articles.filter(a => a.feedId === feed.id);
+          const newFeedArticles = newArticles.filter(a => a.feedId === feed.id);
           const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
           const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
 
@@ -279,10 +283,18 @@ const Index = () => {
       // Update filtered articles to include new feeds' articles
       dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
-      const successfulCount = result.filter(r => r.articles.length > 0).length;
+      const successfulCount = successfulResults.length;
+      const failedCount = failedResults.length;
+      
+      let description = `Successfully imported ${successfulCount} feed(s).`;
+      if (failedCount > 0) {
+        description += ` ${failedCount} feed(s) failed to import.`;
+      }
+      
       toast({
         title: "Feeds Imported",
-        description: `Successfully imported ${newFeeds.length} feed(s) with ${successfulCount} having articles.`,
+        description,
+        variant: failedCount > 0 ? "destructive" : "default",
       });
     } catch (error) {
       toast({
