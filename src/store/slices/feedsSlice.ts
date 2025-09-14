@@ -186,6 +186,22 @@ const feedsSlice = createSlice({
         DataLayer.saveFeed(feed);
       }
     },
+    setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
+      const feed = state.feeds.find(f => f.id === action.payload.feedId);
+      if (feed) {
+        feed.unreadCount = Math.max(0, action.payload.count);
+        // Update in database async
+        DataLayer.saveFeed(feed);
+      }
+    },
+    updateFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; delta: number }>) => {
+      const feed = state.feeds.find(f => f.id === action.payload.feedId);
+      if (feed) {
+        feed.unreadCount = Math.max(0, feed.unreadCount + action.payload.delta);
+        // Update in database async
+        DataLayer.saveFeed(feed);
+      }
+    },
     incrementUnreadCount: (state, action: PayloadAction<string>) => {
       const feed = state.feeds.find(f => f.id === action.payload);
       if (feed) {
@@ -202,7 +218,7 @@ const feedsSlice = createSlice({
         DataLayer.saveFeed(feed);
       }
     },
-    setUnreadCountToZero: (state, action: PayloadAction<string>) => {
+    markAllAsRead: (state, action: PayloadAction<string>) => {
       const feed = state.feeds.find(f => f.id === action.payload);
       if (feed) {
         feed.unreadCount = 0;
@@ -284,9 +300,11 @@ export const {
   renameFeed,
   reorderFeeds,
   updateUnreadCount,
+  setFeedUnreadCount,
+  updateFeedUnreadCount,
   incrementUnreadCount,
   decrementUnreadCount,
-  setUnreadCountToZero,
+  markAllAsRead,
 } = feedsSlice.actions;
 
 export default feedsSlice.reducer;
