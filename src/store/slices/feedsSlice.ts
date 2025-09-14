@@ -195,17 +195,6 @@ const feedsSlice = createSlice({
       .addCase(refreshAllFeeds.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message || 'Failed to refresh feeds';
-      })
-      // Handle unread count updates from articles slice
-      .addCase('articles/updateFeedUnreadCounts', (state, action: PayloadAction<{ feedIds: string[]; counts: number[] }>) => {
-        const { feedIds, counts } = action.payload;
-        feedIds.forEach((feedId, index) => {
-          const feed = state.feeds.find(f => f.id === feedId);
-          if (feed) {
-            feed.unreadCount = counts[index];
-          }
-        });
-        DataLayer.saveFeeds(state.feeds);
       });
   },
 });
