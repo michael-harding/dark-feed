@@ -106,7 +106,18 @@ const Index = () => {
       }
 
       try {
-        // Collect all current article URLs per feed before refresh
+        // Step 1: Verify and correct all existing unread counts
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
+
+          if (actualUnreadCount !== feed.unreadCount) {
+            console.log(`Correcting unread count for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
+            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+          }
+        });
+
+        // Step 2: Collect all current article URLs per feed before refresh
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
         feeds.forEach(feed => {
           const feedArticles = articles.filter(a => a.feedId === feed.id);
@@ -114,10 +125,10 @@ const Index = () => {
           allCurrentUrlsByFeed.set(feed.id, urls);
         });
 
-        // Refresh all feeds
+        // Step 3: Refresh all feeds
         const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
 
-        // After refresh, collect updated URLs (existing + new)
+        // Step 4: After refresh, collect updated URLs (existing + new)
         const updatedFeedArticleUrls = new Set<string>();
         result.forEach(({ newArticles, feed, error }) => {
           if (error) {
@@ -148,15 +159,26 @@ const Index = () => {
           }
         });
 
-        // Clean up old articles using full current URLs
+        // Step 5: Clean up old articles using full current URLs
         dispatch(cleanupOldArticles(updatedFeedArticleUrls));
 
-        // Update filtered articles after refresh (to include new ones)
+        // Step 6: Final verification of all unread counts after cleanup
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
+
+          if (actualUnreadCount !== feed.unreadCount) {
+            console.log(`Final correction for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
+            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+          }
+        });
+
+        // Step 7: Update filtered articles after refresh (to include new ones)
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         toast({
-          title: "Feeds Refreshed",
-          description: "Checked for new articles",
+          title: "Feeds Refreshed & Verified",
+          description: "Checked for new articles and corrected unread counts",
         });
       } catch (error) {
         console.error('Error refreshing feeds:', error);
