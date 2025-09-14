@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FeedSidebar } from '@/components/FeedSidebar';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   addFeed,
@@ -39,6 +41,15 @@ import heroImage from '@/assets/rss-hero.jpg';
 const Index = () => {
   const dispatch = useAppDispatch();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to auth if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   // Redux state
   const { feeds, isLoading } = useAppSelector((state) => state.feeds);
@@ -331,6 +342,23 @@ const Index = () => {
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
+
+  // Show loading while authenticating
+  if (authLoading) {
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!user) {
+    return null;
+  }
 
   if (initialLoading) {
     return (
