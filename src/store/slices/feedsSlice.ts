@@ -179,20 +179,20 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.title = action.payload.newTitle;
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     reorderFeeds: (state, action: PayloadAction<Feed[]>) => {
       state.feeds = action.payload;
       // Save reordered feeds to database async
-      state.feeds.forEach(feed => DataLayer.saveFeed(feed));
+      state.feeds.forEach(feed => DataLayer.saveFeed({ ...feed }));
     },
     updateUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
       const feed = state.feeds.find(f => f.id === action.payload.feedId);
       if (feed) {
         feed.unreadCount = Math.max(0, action.payload.count);
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
@@ -200,7 +200,7 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, action.payload.count);
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     updateFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; delta: number }>) => {
@@ -208,7 +208,7 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount + action.payload.delta);
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     incrementUnreadCount: (state, action: PayloadAction<string>) => {
@@ -216,7 +216,7 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount++;
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     decrementUnreadCount: (state, action: PayloadAction<string>) => {
@@ -224,7 +224,7 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount - 1);
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
     markAllAsRead: (state, action: PayloadAction<string>) => {
@@ -232,7 +232,7 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = 0;
         // Update in database async
-        DataLayer.saveFeed(feed);
+        DataLayer.saveFeed({ ...feed });
       }
     },
   },
