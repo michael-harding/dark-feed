@@ -1,6 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { DataLayer, Article } from '@/services/dataLayer';
-import { addFeed, refreshFeed, refreshAllFeeds, setFeedUnreadCount } from './feedsSlice';
+import { addFeed, refreshFeed, refreshAllFeeds, setFeedUnreadCount, importFeeds } from './feedsSlice';
 
 interface ArticlesState {
   articles: Article[];
@@ -136,6 +136,22 @@ const articlesSlice = createSlice({
           setFeedUnreadCount({ feedId: feed.id, count: unreadCount });
         }
       })
+      // Handle new articles from import feeds
+      .addCase(importFeeds.fulfilled, (state, action) => {
+        const results = action.payload;
+        let totalNewArticles = 0;
+
+        results.forEach(({ articles }) => {
+          if (articles.length > 0) {
+            state.articles.push(...articles);
+            totalNewArticles += articles.length;
+          }
+        });
+
+        if (totalNewArticles > 0) {
+          DataLayer.saveArticles(state.articles);
+        }
+      })
       // Handle new articles from refresh all feeds
       .addCase(refreshAllFeeds.fulfilled, (state, action) => {
         const results = action.payload;
@@ -177,12 +193,8 @@ const articlesSlice = createSlice({
           state.articles = cleanedArticles;
           DataLayer.saveArticles(state.articles);
 
-          // Recalculate unread counts for affected feeds
-          affectedFeeds.forEach(feedId => {
-            const feedArticles = state.articles.filter(a => a.feedId === feedId);
-            const unreadCount = feedArticles.filter(a => !a.isRead).length;
-            setFeedUnreadCount({ feedId, count: unreadCount });
-          });
+          // Recalculate unread counts for affected feeds - handled in feedsSlice for consistency
+          // The feedsSlice will handle unread count updates through its own logic
         }
       });
   },

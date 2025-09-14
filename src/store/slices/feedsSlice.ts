@@ -33,6 +33,30 @@ export const addFeed = createAsyncThunk(
   }
 );
 
+export const importFeeds = createAsyncThunk(
+  'feeds/importFeeds',
+  async (importedFeeds: Feed[], { getState }) => {
+    const state = getState() as { feeds: FeedsState };
+    const existingUrls = state.feeds.feeds.map(f => f.url);
+    const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
+
+    const results: { feed: Feed; articles: any[] }[] = [];
+
+    for (const feed of newFeeds) {
+      try {
+        const data = await DataLayer.fetchRSSFeed(feed.url);
+        const articles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
+        results.push({ feed, articles });
+      } catch (error) {
+        console.error(`Failed to fetch articles for feed ${feed.title}:`, error);
+        results.push({ feed, articles: [] });
+      }
+    }
+
+    return results;
+  }
+);
+
 export const refreshFeed = createAsyncThunk(
   'feeds/refreshFeed',
   async (feed: Feed) => {
@@ -99,10 +123,14 @@ const feedsSlice = createSlice({
         DataLayer.saveFeeds(state.feeds);
       }
     },
-    importFeeds: (state, action: PayloadAction<Feed[]>) => {
-      const existingUrls = state.feeds.map(f => f.url);
-      const newFeeds = action.payload.filter(feed => !existingUrls.includes(feed.url));
-      state.feeds.push(...newFeeds);
+    updateMultipleFeedUnreadCounts: (state, action: PayloadAction<{ feedIds: string[]; counts: number[] }>) => {
+      const { feedIds, counts } = action.payload;
+      feedIds.forEach((feedId, index) => {
+        const feed = state.feeds.find(f => f.id === feedId);
+        if (feed) {
+          feed.unreadCount = counts[index];
+        }
+      });
       DataLayer.saveFeeds(state.feeds);
     },
     markAllAsRead: (state, action: PayloadAction<string>) => {
@@ -129,6 +157,22 @@ const feedsSlice = createSlice({
         state.isLoading = false;
         state.error = action.error.message || 'Failed to add feed';
       })
+      // Import feeds
+      .addCase(importFeeds.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(importFeeds.fulfilled, (state, action) => {
+        state.isLoading = false;
+        action.payload.forEach(({ feed }) => {
+          state.feeds.push(feed);
+        });
+        DataLayer.saveFeeds(state.feeds);
+      })
+      .addCase(importFeeds.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || 'Failed to import feeds';
+      })
       // Refresh feed
       .addCase(refreshFeed.pending, (state) => {
         state.isLoading = true;
@@ -151,6 +195,17 @@ const feedsSlice = createSlice({
       .addCase(refreshAllFeeds.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.error.message || 'Failed to refresh feeds';
+      })
+      // Handle unread count updates from articles slice
+      .addCase('articles/updateFeedUnreadCounts', (state, action: PayloadAction<{ feedIds: string[]; counts: number[] }>) => {
+        const { feedIds, counts } = action.payload;
+        feedIds.forEach((feedId, index) => {
+          const feed = state.feeds.find(f => f.id === feedId);
+          if (feed) {
+            feed.unreadCount = counts[index];
+          }
+        });
+        DataLayer.saveFeeds(state.feeds);
       });
   },
 });
@@ -161,7 +216,7 @@ export const {
   reorderFeeds,
   updateFeedUnreadCount,
   setFeedUnreadCount,
-  importFeeds,
+  updateMultipleFeedUnreadCounts,
   markAllAsRead,
 } = feedsSlice.actions;
 

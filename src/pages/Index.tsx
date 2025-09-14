@@ -13,6 +13,7 @@ import {
   reorderFeeds,
   updateFeedUnreadCount,
   importFeeds,
+  setFeedUnreadCount,
   markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
@@ -209,7 +210,7 @@ const Index = () => {
     }
   };
 
-  const handleImportFeeds = (importedFeeds: Feed[]) => {
+  const handleImportFeeds = async (importedFeeds: Feed[]) => {
     // Filter out feeds that already exist (by URL)
     const existingUrls = feeds.map(f => f.url);
     const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
@@ -222,13 +223,41 @@ const Index = () => {
       return;
     }
 
-    dispatch(importFeeds(newFeeds));
-    // Update filtered articles to include new feeds' articles
-    dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-    toast({
-      title: "Feeds Imported",
-      description: `Successfully imported ${newFeeds.length} new feed(s).`,
-    });
+    try {
+      const result = await dispatch(importFeeds(newFeeds)).unwrap();
+
+      // Get current articles state to calculate existing articles
+      const currentArticles = articles;
+
+      // Calculate correct unread counts for imported feeds
+      result.forEach(({ articles, feed }) => {
+        if (articles.length > 0) {
+          // Get all articles for this feed (existing + new)
+          const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
+          const newFeedArticles = articles.filter(a => a.feedId === feed.id);
+          const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
+          const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
+
+          // Update the feed's unread count
+          dispatch(setFeedUnreadCount({ feedId: feed.id, count: unreadCount }));
+        }
+      });
+
+      // Update filtered articles to include new feeds' articles
+      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+
+      const successfulCount = result.filter(r => r.articles.length > 0).length;
+      toast({
+        title: "Feeds Imported",
+        description: `Successfully imported ${newFeeds.length} feed(s) with ${successfulCount} having articles.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Import Error",
+        description: "Failed to import some feeds. Check the console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemoveFeed = (feedId: string) => {
