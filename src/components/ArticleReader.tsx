@@ -38,7 +38,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
             </div>
           </div>
           <h3 className="text-xl font-semibold text-foreground mb-2">
-            Welcome to RSS Reader
+            Welcome to Dark Feed
           </h3>
           <p className="text-muted-foreground mb-6">
             Select an article from the sidebar to start reading, or add some RSS feeds to get started.
