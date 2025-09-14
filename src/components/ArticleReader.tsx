@@ -1,5 +1,6 @@
 import { formatDistanceToNow } from 'date-fns';
 import { ExternalLink, Star, Bookmark, Share, ArrowLeft } from 'lucide-react';
+import { parsePublishedDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -10,7 +11,7 @@ interface Article {
   description: string;
   content: string;
   url: string;
-  publishedAt: Date;
+  publishedAt: string;
   feedId: string;
   feedTitle: string;
   isRead: boolean;
@@ -37,7 +38,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
             </div>
           </div>
           <h3 className="text-xl font-semibold text-foreground mb-2">
-            Welcome to RSS Reader
+            Welcome to Dark Feed
           </h3>
           <p className="text-muted-foreground mb-6">
             Select an article from the sidebar to start reading, or add some RSS feeds to get started.
@@ -124,7 +125,7 @@ export const ArticleReader = ({ article, onToggleStar, onToggleBookmark, onClose
               <span>•</span>
             </>
           )}
-          <span>{formatDistanceToNow(article.publishedAt, { addSuffix: true })}</span>
+          <span>{formatDistanceToNow(parsePublishedDate(article.publishedAt), { addSuffix: true })}</span>
         </div>
       </div>
 

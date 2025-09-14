@@ -1,150 +1,69 @@
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { FeedSidebar } from '@/components/FeedSidebar';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import {
+  addFeed,
+  refreshAllFeeds,
+  removeFeed,
+  renameFeed,
+  reorderFeeds,
+  updateFeedUnreadCount,
+  importFeeds,
+  setFeedUnreadCount,
+  markAllAsRead,
+} from '@/store/slices/feedsSlice';
+import {
+  toggleStar,
+  toggleBookmark,
+  markAsRead,
+  removeArticlesByFeed,
+  updateArticlesFeedTitle,
+  markAllAsReadForFeed,
+  updateFilteredArticles,
+  cleanupOldArticles,
+} from '@/store/slices/articlesSlice';
+import {
+  selectFeed,
+  selectArticle,
+  toggleSortMode,
+  setAccentColor,
+  setInitialLoading,
+} from '@/store/slices/uiSlice';
+import { Feed } from '@/services/dataLayer';
 import heroImage from '@/assets/rss-hero.jpg';
 
-
-interface Feed {
-  id: string;
-  title: string;
-  url: string;
-  unreadCount: number;
-  category?: string;
-}
-
-interface Article {
-  id: string;
-  title: string;
-  description: string;
-  content: string;
-  url: string;
-  publishedAt: Date;
-  feedId: string;
-  feedTitle: string;
-  isRead: boolean;
-  isStarred: boolean;
-  isBookmarked: boolean;
-  author?: string;
-  sortOrder: number;
-}
-
-// Local storage keys
-const FEEDS_KEY = 'rss-reader-feeds';
-const ARTICLES_KEY = 'rss-reader-articles';
-
-// Helper functions for localStorage
-const loadFromStorage = <T,>(key: string, defaultValue: T): T => {
-  try {
-    const stored = localStorage.getItem(key);
-    if (stored) {
-      const parsed = JSON.parse(stored);
-      // Convert date strings back to Date objects for articles
-      if (key === ARTICLES_KEY && Array.isArray(parsed)) {
-        return parsed.map(article => ({
-          ...article,
-          publishedAt: new Date(article.publishedAt)
-        })) as T;
-      }
-      return parsed;
-    }
-  } catch (error) {
-    console.error(`Error loading ${key} from localStorage:`, error);
-  }
-  return defaultValue;
-};
-
-const saveToStorage = <T,>(key: string, value: T): void => {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Error saving ${key} to localStorage:`, error);
-  }
-};
-
-// RSS parsing functions using RSS2JSON API
-const fetchRSSFeed = async (url: string): Promise<any> => {
-  // On dev server, limit fetching to 10 minute intervals to prevent 429 errors
-  if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-    const FEED_FETCH_TIMES_KEY = 'rss-feed-fetch-times';
-    let fetchTimes: Record<string, number> = {};
-    try {
-      fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
-    } catch {}
-    const now = Date.now();
-    const lastFetch = fetchTimes[url] || 0;
-    const tenMinutes = 10 * 60 * 1000;
-    if (now - lastFetch < tenMinutes) {
-      console.warn(`RSS feed for ${url} was fetched less than 10 minutes ago. Skipping fetch on dev server to prevent 429 errors`);
-      return {
-        status: 'skipped',
-        feed: { title: 'Development Feed (skipped)' },
-        items: []
-      };
-    }
-    fetchTimes[url] = now;
-    localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
-  }
-  try {
-    // Use RSS2JSON API which is browser-compatible
-    const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
-    const response = await fetch(apiUrl);
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    if (data.status !== 'ok') {
-      throw new Error(data.message || 'Failed to parse RSS feed');
-    }
-
-    return data;
-  } catch (error) {
-    console.error('Error fetching RSS feed:', error);
-    throw error;
-  }
-};
-
 const Index = () => {
-  // Load from localStorage or use empty arrays as defaults
-  const [feeds, setFeeds] = useState<Feed[]>(() => {
-    const stored = loadFromStorage(FEEDS_KEY, []);
-    return stored;
-  });
-  const [articles, setArticles] = useState<Article[]>(() => {
-    const stored = loadFromStorage(ARTICLES_KEY, []);
-    // Add sortOrder property if missing
-    return stored.map((a: any, i: number) => ({ ...a, sortOrder: i }));
-  });
-  const [selectedFeed, setSelectedFeed] = useState<string | null>('all');
-  const [selectedArticle, setSelectedArticle] = useState<string | null>(null);
-  const [filteredArticles, setFilteredArticles] = useState<Article[]>([]);
-  const [sortMode, setSortMode] = useState<'chronological' | 'unreadOnTop'>(() => {
-    const saved = localStorage.getItem('rss-sort-mode');
-    return saved === 'unreadOnTop' ? 'unreadOnTop' : 'chronological';
-  });
-  const [isLoading, setIsLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const dispatch = useAppDispatch();
   const { toast } = useToast();
 
-  // Initialize accent color from localStorage immediately
+  // Redux state
+  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
+  const { articles, filteredArticles } = useAppSelector((state) => state.articles);
+  const {
+    selectedFeed,
+    selectedArticle,
+    sortMode,
+    accentColor,
+    initialLoading
+  } = useAppSelector((state) => state.ui);
+
+  // Initialize accent color from Redux state
   useEffect(() => {
-    const saved = localStorage.getItem('rss-accent-color');
-    if (saved) {
+    if (accentColor) {
       // Parse the HSL color string (e.g., "46 87% 65%")
-      const [hue, saturation, lightness] = saved.split(' ');
+      const [hue, saturation, lightness] = accentColor.split(' ');
       const h = parseInt(hue);
       const s = parseInt(saturation.replace('%', ''));
       const l = parseInt(lightness.replace('%', ''));
 
       // Update main accent color
-      document.documentElement.style.setProperty('--accent', saved);
-      document.documentElement.style.setProperty('--ring', saved);
-      document.documentElement.style.setProperty('--feed-unread', saved);
+      document.documentElement.style.setProperty('--accent', accentColor);
+      document.documentElement.style.setProperty('--ring', accentColor);
+      document.documentElement.style.setProperty('--feed-unread', accentColor);
 
       // Generate and update all accent shades
       const shades = [
@@ -168,126 +87,98 @@ const Index = () => {
 
       // Update favicon color on page load
       import('@/utils/faviconGenerator').then(({ faviconGenerator }) => {
-        faviconGenerator.generateAndUpdateFavicon(saved);
+        faviconGenerator.generateAndUpdateFavicon(accentColor);
       });
     }
-  }, []);
+  }, [accentColor]);
 
-  // Save to localStorage whenever feeds or articles change
+  // Update filtered articles when selectedFeed or sortMode changes (stable on read toggles)
   useEffect(() => {
-    saveToStorage(FEEDS_KEY, feeds);
-  }, [feeds]);
-
-  useEffect(() => {
-    saveToStorage(ARTICLES_KEY, articles);
-  }, [articles]);
+    dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+  }, [dispatch, selectedFeed, sortMode]);
 
   // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
     const initializeApp = async () => {
       if (feeds.length === 0) {
-        setInitialLoading(false);
+        dispatch(setInitialLoading(false));
         return;
       }
 
-      setIsLoading(true);
-
-      const currentFeedArticleUrls = new Set<string>();
-
       try {
-        // First, refresh feeds and collect current article URLs
-        for (const feed of feeds) {
-          try {
-            const data = await fetchRSSFeed(feed.url);
+        // Step 1: Verify and correct all existing unread counts
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
-            // Collect URLs of current articles in the feed
-            data.items?.forEach((item: any) => {
-              if (item.link) {
-                currentFeedArticleUrls.add(item.link);
-              }
-            });
+          if (actualUnreadCount !== feed.unreadCount) {
+            console.log(`Correcting unread count for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
+            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+          }
+        });
 
-            // Convert RSS items to articles
-            const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
-              id: `${feed.id}-${Date.now()}-${index}`,
-              title: item.title || 'Untitled',
-              description: item.description?.replace(/<[^>]*>/g, '') || '',
-              content: item.content || item.description || '',
-              url: item.link || '',
-              publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
-              feedId: feed.id,
-              feedTitle: feed.title,
-              isRead: false,
-              isStarred: false,
-              isBookmarked: false,
-              author: item.author || ''
-            })) || [];
+        // Step 2: Collect all current article URLs per feed before refresh
+        const allCurrentUrlsByFeed = new Map<string, Set<string>>();
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const urls = new Set(feedArticles.map(a => a.url));
+          allCurrentUrlsByFeed.set(feed.id, urls);
+        });
 
-            // Filter out articles that already exist (by URL)
-            setArticles(prev => {
-              const existingUrls = prev.map(a => a.url);
-              const uniqueNewArticles = newArticles.filter(article => !existingUrls.includes(article.url));
+        // Step 3: Refresh all feeds
+        const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
 
-              if (uniqueNewArticles.length > 0) {
-                toast({
-                  title: 'New Articles',
-                  description: `Found ${uniqueNewArticles.length} new articles for ${feed.title}`,
-                });
-
-                // Update feed unread count
-                setFeeds(prevFeeds => prevFeeds.map(f =>
-                  f.id === feed.id
-                    ? { ...f, unreadCount: f.unreadCount + uniqueNewArticles.length }
-                    : f
-                ));
-
-                return [...prev, ...uniqueNewArticles];
-              }
-
-              return prev;
-            });
-          } catch (error) {
+        // Step 4: After refresh, collect updated URLs (existing + new)
+        const updatedFeedArticleUrls = new Set<string>();
+        result.forEach(({ newArticles, feed, error }) => {
+          if (error) {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
             toast({
               title: 'Feed Refresh Error',
-              description: `${feed.title}: ${String(error)}`,
+              description: `${feed.title}: ${error}`,
               variant: 'destructive',
             });
-          }
-        }
-
-        // After refreshing all feeds, clean up read articles older than 48 hours
-        // that are no longer present in any feed
-        const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-        setArticles(prev => {
-          const filteredArticles = prev.filter(article => {
-            // Keep article if:
-            // 1. It's not read, OR
-            // 2. It's newer than 48 hours, OR
-            // 3. It's still present in the current feed data, OR
-            // 4. It's starred or bookmarked
-            return (
-              !article.isRead ||
-              article.publishedAt > fortyEightHoursAgo ||
-              currentFeedArticleUrls.has(article.url) ||
-              article.isStarred ||
-              article.isBookmarked
-            );
-          });
-
-          const removedCount = prev.length - filteredArticles.length;
-          if (removedCount > 0) {
-            toast({
-              title: 'Cleanup',
-              description: `Cleaned up ${removedCount} old read articles that are no longer in feeds`,
+          } else {
+            // Add all current URLs for this feed (from before) plus new ones
+            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set();
+            newArticles.forEach(article => {
+              if (article.url) {
+                currentUrls.add(article.url);
+              }
             });
+            currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
+
+            // Update feed unread count for new articles
+            if (newArticles.length > 0) {
+              dispatch(updateFeedUnreadCount({ feedId: feed.id, delta: newArticles.length }));
+              toast({
+                title: 'New Articles',
+                description: `Found ${newArticles.length} new articles for ${feed.title}`,
+              });
+            }
           }
-          return filteredArticles;
         });
 
+        // Step 5: Clean up old articles using full current URLs
+        dispatch(cleanupOldArticles(updatedFeedArticleUrls));
+
+        // Step 6: Final verification of all unread counts after cleanup
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
+
+          if (actualUnreadCount !== feed.unreadCount) {
+            console.log(`Final correction for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
+            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+          }
+        });
+
+        // Step 7: Update filtered articles after refresh (to include new ones)
+        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+
         toast({
-          title: "Feeds Refreshed",
-          description: "Checked for new articles",
+          title: "Feeds Refreshed & Verified",
+          description: "Checked for new articles and corrected unread counts",
         });
       } catch (error) {
         console.error('Error refreshing feeds:', error);
@@ -297,88 +188,22 @@ const Index = () => {
           variant: 'destructive',
         });
       } finally {
-        setIsLoading(false);
-        setInitialLoading(false);
+        dispatch(setInitialLoading(false));
       }
     };
 
     initializeApp();
   }, []); // Only run on initial page load
 
-  // Filter articles based on selected feed
-  // Helper to set sortOrder for articles
-  const setSortOrderForArticles = (articles: Article[], mode: 'chronological' | 'unreadOnTop') => {
-    let sorted = [...articles];
-    if (mode === 'chronological') {
-      sorted.sort((a, b) => b.publishedAt.getTime() - a.publishedAt.getTime());
-    } else {
-      sorted.sort((a, b) => {
-        if (a.isRead !== b.isRead) return a.isRead ? 1 : -1;
-        return b.publishedAt.getTime() - a.publishedAt.getTime();
-      });
-    }
-    return sorted.map((a, i) => ({ ...a, sortOrder: i }));
-  };
-
-  useEffect(() => {
-    let filtered: Article[] = [];
-    if (selectedFeed === 'all') {
-      filtered = articles;
-    } else if (selectedFeed === 'starred') {
-      filtered = articles.filter(article => article.isStarred);
-    } else if (selectedFeed === 'bookmarks') {
-      filtered = articles.filter(article => article.isBookmarked);
-    } else {
-      filtered = articles.filter(article => article.feedId === selectedFeed);
-    }
-
-    // Set sortOrder for filtered articles
-    const withOrder = setSortOrderForArticles(filtered, sortMode);
-    setFilteredArticles(withOrder);
-  }, [selectedFeed, sortMode]);
-
-
-  useEffect(() => {
-    // When articles change, sort by sortOrder
-    setFilteredArticles(prev => [...prev].sort((a, b) => a.sortOrder - b.sortOrder));
-  }, [articles]);
-
-
+  // Handlers
   const handleAddFeed = async (url: string) => {
-    setIsLoading(true);
     try {
-      const data = await fetchRSSFeed(url);
-      const feedId = Date.now().toString();
-
-      const newFeed: Feed = {
-        id: feedId,
-        title: data.feed?.title || 'Unknown Feed',
-        url,
-        unreadCount: data.items?.length || 0,
-      };
-
-      // Convert RSS items to articles
-      const newArticles: Article[] = data.items?.map((item: any, index: number) => ({
-        id: `${feedId}-${index}`,
-        title: item.title || 'Untitled',
-        description: item.description?.replace(/<[^>]*>/g, '') || '', // Strip HTML tags
-        content: item.content || item.description || '',
-        url: item.link || '',
-        publishedAt: item.pubDate ? new Date(item.pubDate) : new Date(),
-        feedId,
-        feedTitle: data.feed?.title || 'Unknown Feed',
-        isRead: false,
-        isStarred: false,
-        isBookmarked: false,
-        author: item.author || ''
-      })) || [];
-
-      setFeeds(prev => [...prev, newFeed]);
-      setArticles(prev => [...prev, ...newArticles]);
-
+      const result = await dispatch(addFeed(url)).unwrap();
+      // Update filtered articles to include new feed's articles
+      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
       toast({
         title: "Feed Added",
-        description: `Successfully added ${data.feed?.title || url}`,
+        description: `Successfully added ${result.feed.title}`,
       });
     } catch (error) {
       toast({
@@ -386,56 +211,28 @@ const Index = () => {
         description: "Failed to add RSS feed. Please check the URL.",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleToggleStar = (articleId: string) => {
-    const updateFunc = prev => prev.map(article =>
-      article.id === articleId
-        ? { ...article, isStarred: !article.isStarred }
-        : article
-    );
-
-    setArticles(updateFunc);
-    setFilteredArticles(updateFunc);
+    dispatch(toggleStar(articleId));
   };
 
   const handleToggleBookmark = (articleId: string) => {
-    const updateFunc = prev => prev.map(article =>
-      article.id === articleId
-        ? { ...article, isBookmarked: !article.isBookmarked }
-        : article
-    );
-
-    setArticles(updateFunc);
-    setFilteredArticles(updateFunc);
+    dispatch(toggleBookmark(articleId));
   };
 
   const handleMarkAsRead = (articleId: string) => {
-    const updateFunc = (prev => prev.map(article => article.id === articleId
-        ? { ...article, isRead: !article.isRead }
-        : article
-    ));
-
-    setArticles(updateFunc);
-    setFilteredArticles(updateFunc);
-
-    // Update feed unread count
     const article = articles.find(a => a.id === articleId);
     if (article) {
-      setFeeds(prev => prev.map(feed => {
-        if (feed.id === article.feedId) {
-          const delta = article.isRead ? 1 : -1;
-          return { ...feed, unreadCount: Math.max(0, feed.unreadCount + delta) };
-        }
-        return feed;
-      }));
+      dispatch(markAsRead(articleId));
+      // Update feed unread count
+      const delta = article.isRead ? 1 : -1;
+      dispatch(updateFeedUnreadCount({ feedId: article.feedId, delta }));
     }
   };
 
-  const handleImportFeeds = (importedFeeds: Feed[]) => {
+  const handleImportFeeds = async (importedFeeds: Feed[]) => {
     // Filter out feeds that already exist (by URL)
     const existingUrls = feeds.map(f => f.url);
     const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
@@ -448,25 +245,50 @@ const Index = () => {
       return;
     }
 
-    // Add the new feeds
-    setFeeds(prev => [...prev, ...newFeeds]);
+    try {
+      const result = await dispatch(importFeeds(newFeeds)).unwrap();
 
-    toast({
-      title: "Feeds Imported",
-      description: `Successfully imported ${newFeeds.length} new feed(s).`,
-    });
+      // Get current articles state to calculate existing articles
+      const currentArticles = articles;
+
+      // Calculate correct unread counts for imported feeds
+      result.forEach(({ articles, feed }) => {
+        if (articles.length > 0) {
+          // Get all articles for this feed (existing + new)
+          const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
+          const newFeedArticles = articles.filter(a => a.feedId === feed.id);
+          const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
+          const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
+
+          // Update the feed's unread count
+          dispatch(setFeedUnreadCount({ feedId: feed.id, count: unreadCount }));
+        }
+      });
+
+      // Update filtered articles to include new feeds' articles
+      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+
+      const successfulCount = result.filter(r => r.articles.length > 0).length;
+      toast({
+        title: "Feeds Imported",
+        description: `Successfully imported ${newFeeds.length} feed(s) with ${successfulCount} having articles.`,
+      });
+    } catch (error) {
+      toast({
+        title: "Import Error",
+        description: "Failed to import some feeds. Check the console for details.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleRemoveFeed = (feedId: string) => {
-    // Remove the feed
-    setFeeds(prev => prev.filter(feed => feed.id !== feedId));
-
-    // Remove all articles from this feed
-    setArticles(prev => prev.filter(article => article.feedId !== feedId));
+    dispatch(removeFeed(feedId));
+    dispatch(removeArticlesByFeed(feedId));
 
     // If the removed feed was selected, switch to "all"
     if (selectedFeed === feedId) {
-      setSelectedFeed('all');
+      dispatch(selectFeed('all'));
     }
 
     toast({
@@ -476,7 +298,7 @@ const Index = () => {
   };
 
   const handleReorderFeeds = (reorderedFeeds: Feed[]) => {
-    setFeeds(reorderedFeeds);
+    dispatch(reorderFeeds(reorderedFeeds));
     toast({
       title: "Feeds Reordered",
       description: "Feed order has been updated.",
@@ -484,18 +306,8 @@ const Index = () => {
   };
 
   const handleRenameFeed = (feedId: string, newTitle: string) => {
-    setFeeds(prev => prev.map(feed =>
-      feed.id === feedId
-        ? { ...feed, title: newTitle }
-        : feed
-    ));
-
-    // Also update the feedTitle in all articles from this feed
-    setArticles(prev => prev.map(article =>
-      article.feedId === feedId
-        ? { ...article, feedTitle: newTitle }
-        : article
-    ));
+    dispatch(renameFeed({ feedId, newTitle }));
+    dispatch(updateArticlesFeedTitle({ feedId, newTitle }));
 
     toast({
       title: "Feed Renamed",
@@ -504,25 +316,18 @@ const Index = () => {
   };
 
   const handleMarkAllAsRead = (feedId: string) => {
-    // Mark all articles from this feed as read
-    setArticles(prev => prev.map(article =>
-      article.feedId === feedId && !article.isRead
-        ? { ...article, isRead: true }
-        : article
-    ));
-
-    // Reset the feed's unread count to 0
-    setFeeds(prev => prev.map(feed =>
-      feed.id === feedId
-        ? { ...feed, unreadCount: 0 }
-        : feed
-    ));
+    dispatch(markAllAsReadForFeed(feedId));
+    dispatch(markAllAsRead(feedId));
 
     const feed = feeds.find(f => f.id === feedId);
     toast({
       title: "Articles Marked as Read",
       description: `All articles in "${feed?.title}" have been marked as read.`,
     });
+  };
+
+  const handleToggleSortMode = () => {
+    dispatch(toggleSortMode());
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
@@ -550,7 +355,7 @@ const Index = () => {
       <FeedSidebar
         feeds={feeds}
         selectedFeed={selectedFeed}
-        onFeedSelect={setSelectedFeed}
+        onFeedSelect={(feedId) => dispatch(selectFeed(feedId))}
         onAddFeed={handleAddFeed}
         onImportFeeds={handleImportFeeds}
         onRemoveFeed={handleRemoveFeed}
@@ -564,20 +369,12 @@ const Index = () => {
       <ArticleList
         articles={filteredArticles}
         selectedArticle={selectedArticle}
-        onArticleSelect={setSelectedArticle}
+        onArticleSelect={(articleId) => dispatch(selectArticle(articleId))}
         onToggleStar={handleToggleStar}
         onToggleBookmark={handleToggleBookmark}
         onMarkAsRead={handleMarkAsRead}
         sortMode={sortMode}
-        onToggleSortMode={() => {
-          setSortMode(m => {
-            const newMode = m === 'chronological' ? 'unreadOnTop' : 'chronological';
-            localStorage.setItem('rss-sort-mode', newMode);
-            // Update sortOrder for all articles
-            setArticles(prev => setSortOrderForArticles(prev, newMode));
-            return newMode;
-          });
-        }}
+        onToggleSortMode={handleToggleSortMode}
       />
 
       {/* Article Reader */}
@@ -585,7 +382,7 @@ const Index = () => {
         article={selectedArticleData || null}
         onToggleStar={handleToggleStar}
         onToggleBookmark={handleToggleBookmark}
-        onClose={() => setSelectedArticle(null)}
+        onClose={() => dispatch(selectArticle(null))}
       />
     </div>
   );

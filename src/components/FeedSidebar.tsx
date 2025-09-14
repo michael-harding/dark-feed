@@ -26,14 +26,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';
-
-interface Feed {
-  id: string;
-  title: string;
-  url: string;
-  unreadCount: number;
-  category?: string;
-}
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { setAccentColor } from '@/store/slices/uiSlice';
+import { Feed } from '@/services/dataLayer';
 
 interface FeedSidebarProps {
   feeds: Feed[];
@@ -175,10 +170,11 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
 };
 
 export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
+  const dispatch = useAppDispatch();
+  const { accentColor } = useAppSelector((state) => state.ui);
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
-  const [accentColor, setAccentColor] = useState('46 87% 65%'); // Default yellow accent
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag and drop sensors
@@ -200,18 +196,6 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
     { name: 'Red', value: '0 84% 60%', hex: '#ef4444' },
     { name: 'Teal', value: '173 80% 40%', hex: '#14b8a6' },
   ];
-
-  // Load saved accent color on mount
-  useEffect(() => {
-    const saved = localStorage.getItem('rss-accent-color');
-    if (saved) {
-      setAccentColor(saved);
-      updateAccentColor(saved);
-    }
-
-    // Initialize favicon generator
-  // faviconGenerator.loadBaseImage() removed; SVG favicon logic is now used.
-  }, []);
 
   // Update CSS variables when accent color changes
   const updateAccentColor = (color: string) => {
@@ -248,9 +232,8 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
   };
 
   const handleAccentColorChange = (color: string) => {
-    setAccentColor(color);
+    dispatch(setAccentColor(color));
     updateAccentColor(color);
-    localStorage.setItem('rss-accent-color', color);
 
     // Update favicon to match new accent color
     faviconGenerator.generateAndUpdateFavicon(color);
@@ -345,7 +328,6 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
           </div>
         </div>
       </div>
-
 
       {/* Navigation */}
       <div className="p-4 border-b border-sidebar-border">
@@ -496,60 +478,70 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
                   <Palette className="w-4 h-4" />
                   Accent Color
                 </h3>
-                <div className="grid grid-cols-4 gap-3">
-                  {accentColors.map((color) => (
+                <div className="grid grid-cols-8 gap-3">
+                  {accentColors.map((colorOption) => (
                     <button
-                      key={color.name}
-                      onClick={() => handleAccentColorChange(color.value)}
+                      key={colorOption.name}
                       className={cn(
-                        "flex flex-col items-center gap-2 p-3 rounded-lg border-2 transition-all",
-                        accentColor === color.value
-                          ? "border-accent bg-accent/10"
-                          : "border-border hover:border-accent/50"
+                        "w-full aspect-square rounded-lg border-2 transition-all relative overflow-hidden group",
+                        accentColor === colorOption.value
+                          ? "border-ring shadow-lg scale-105"
+                          : "border-border hover:border-muted-foreground hover:scale-102"
                       )}
+                      onClick={() => handleAccentColorChange(colorOption.value)}
+                      style={{ backgroundColor: colorOption.hex }}
+                      title={colorOption.name}
                     >
-                      <div
-                        className="w-8 h-8 rounded-full border-2 border-white/20"
-                        style={{ backgroundColor: color.hex }}
-                      />
-                      <span className="text-xs font-medium">{color.name}</span>
+                      {accentColor === colorOption.value && (
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <Check className="w-5 h-5 text-white drop-shadow-lg" />
+                        </div>
+                      )}
+                      <div className="absolute inset-x-0 bottom-0 bg-black/50 text-white text-xs py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {colorOption.name}
+                      </div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Manage Feeds Section */}
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3">Manage Feeds</h3>
-                <div className="space-y-2 max-h-96 overflow-y-auto">
-                  {feeds.length === 0 ? (
-                    <p className="text-sm text-muted-foreground p-4 text-center">
-                      No feeds added yet. Add a feed to get started.
-                    </p>
-                  ) : (
+              {/* Feed Management Section */}
+              {feeds.length > 0 && (
+                <div>
+                  <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                    Manage Feeds
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    Drag feeds to reorder them in the sidebar
+                  </p>
+                  <div className="max-h-96 overflow-y-auto">
                     <DndContext
                       sensors={sensors}
                       collisionDetection={closestCenter}
                       onDragEnd={handleDragEnd}
                     >
-                      <SortableContext items={feeds.map(feed => feed.id)} strategy={verticalListSortingStrategy}>
-                        {feeds.map((feed) => (
-                          <SortableFeedItem
-                            key={feed.id}
-                            feed={feed}
-                            onRemove={onRemoveFeed}
-                            onRename={onRenameFeed}
-                            onMarkAllAsRead={onMarkAllAsRead}
-                          />
-                        ))}
+                      <SortableContext items={feeds} strategy={verticalListSortingStrategy}>
+                        <div className="space-y-2">
+                          {feeds.map((feed) => (
+                            <SortableFeedItem
+                              key={feed.id}
+                              feed={feed}
+                              onRemove={onRemoveFeed}
+                              onRename={onRenameFeed}
+                              onMarkAllAsRead={onMarkAllAsRead}
+                            />
+                          ))}
+                        </div>
                       </SortableContext>
                     </DndContext>
-                  )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Hidden file input for import */}
         <input
           ref={fileInputRef}
           type="file"
