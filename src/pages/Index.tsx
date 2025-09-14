@@ -105,11 +105,19 @@ const Index = () => {
       }
 
       try {
-        const currentFeedArticleUrls = new Set<string>();
+        // Collect all current article URLs per feed before refresh
+        const allCurrentUrlsByFeed = new Map<string, Set<string>>();
+        feeds.forEach(feed => {
+          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const urls = new Set(feedArticles.map(a => a.url));
+          allCurrentUrlsByFeed.set(feed.id, urls);
+        });
 
-        // Refresh all feeds and collect article URLs
+        // Refresh all feeds
         const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
 
+        // After refresh, collect updated URLs (existing + new)
+        const updatedFeedArticleUrls = new Set<string>();
         result.forEach(({ newArticles, feed, error }) => {
           if (error) {
             console.error(`Failed to refresh feed ${feed.title}:`, error);
@@ -119,12 +127,14 @@ const Index = () => {
               variant: 'destructive',
             });
           } else {
-            // Collect URLs of current articles in the feed
+            // Add all current URLs for this feed (from before) plus new ones
+            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set();
             newArticles.forEach(article => {
               if (article.url) {
-                currentFeedArticleUrls.add(article.url);
+                currentUrls.add(article.url);
               }
             });
+            currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
 
             // Update feed unread count for new articles
             if (newArticles.length > 0) {
@@ -137,8 +147,8 @@ const Index = () => {
           }
         });
 
-        // Clean up old articles
-        dispatch(cleanupOldArticles(currentFeedArticleUrls));
+        // Clean up old articles using full current URLs
+        dispatch(cleanupOldArticles(updatedFeedArticleUrls));
 
         // Update filtered articles after refresh (to include new ones)
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));

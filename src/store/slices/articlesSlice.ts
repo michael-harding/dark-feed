@@ -113,7 +113,21 @@ const articlesSlice = createSlice({
         const { newArticles, feed } = action.payload;
 
         if (newArticles.length > 0) {
+          // Collect all current article URLs for this feed before adding new ones
+          const currentUrls = new Set(
+            state.articles
+              .filter(a => a.feedId === feed.id)
+              .map(a => a.url)
+          );
+
+          // Add new articles
           state.articles.push(...newArticles);
+          DataLayer.saveArticles(state.articles);
+
+          // Clean up old articles using complete current URLs
+          const updatedUrls = new Set([...currentUrls, ...newArticles.map(a => a.url).filter(Boolean)]);
+          const cleanedArticles = DataLayer.cleanupOldArticles(state.articles, updatedUrls);
+          state.articles = cleanedArticles;
           DataLayer.saveArticles(state.articles);
 
           // Recalculate unread count for this feed
@@ -127,16 +141,40 @@ const articlesSlice = createSlice({
         const results = action.payload;
         let totalNewArticles = 0;
         const affectedFeeds = new Set<string>();
+        const allCurrentUrls = new Set<string>();
 
+        // First, collect all current URLs per feed
+        results.forEach(({ newArticles, feed }) => {
+          if (!feed.error) {
+            const currentUrls = new Set(
+              state.articles
+                .filter(a => a.feedId === feed.id)
+                .map(a => a.url)
+            );
+            currentUrls.forEach(url => allCurrentUrls.add(url));
+          }
+        });
+
+        // Add new articles and collect their URLs
         results.forEach(({ newArticles, feed }) => {
           if (newArticles.length > 0 && !feed.error) {
             state.articles.push(...newArticles);
             totalNewArticles += newArticles.length;
             affectedFeeds.add(feed.id);
+
+            // Add new URLs to the complete set
+            newArticles.forEach(article => {
+              if (article.url) {
+                allCurrentUrls.add(article.url);
+              }
+            });
           }
         });
 
         if (totalNewArticles > 0) {
+          // Clean up old articles using complete current URLs
+          const cleanedArticles = DataLayer.cleanupOldArticles(state.articles, allCurrentUrls);
+          state.articles = cleanedArticles;
           DataLayer.saveArticles(state.articles);
 
           // Recalculate unread counts for affected feeds
