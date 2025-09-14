@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
-import { DataLayer, Feed } from '@/services/dataLayer';
+import { DataLayer, Feed, Article } from '@/services/dataLayer';
 
 interface FeedsState {
   feeds: Feed[];
@@ -8,82 +8,151 @@ interface FeedsState {
 }
 
 const initialState: FeedsState = {
-  feeds: DataLayer.loadFeeds(),
+  feeds: [],
   isLoading: false,
   error: null,
 };
 
-// Async thunks
+// Async thunk to load feeds
+export const loadFeeds = createAsyncThunk(
+  'feeds/loadFeeds',
+  async () => {
+    return await DataLayer.loadFeeds();
+  }
+);
+
+// Async thunk to add a new feed
 export const addFeed = createAsyncThunk(
   'feeds/addFeed',
   async (url: string) => {
-    const data = await DataLayer.fetchRSSFeed(url);
-    const feedId = Date.now().toString();
+    try {
+      const data = await DataLayer.fetchRSSFeed(url);
+      
+      if (data.status === 'skipped') {
+        throw new Error('Feed fetching skipped on development server');
+      }
 
-    const newFeed: Feed = {
-      id: feedId,
-      title: data.feed?.title || 'Unknown Feed',
-      url,
-      unreadCount: data.items?.length || 0,
-    };
+      const feedId = crypto.randomUUID();
+      const newFeed: Feed = {
+        id: feedId,
+        title: data.feed?.title || 'Unknown Feed',
+        url: url,
+        unreadCount: data.items?.length || 0,
+        category: undefined
+      };
 
-    const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title);
+      await DataLayer.saveFeed(newFeed);
+      
+      const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
+      const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
+        .filter(article => !existingUrls.has(article.url));
 
-    return { feed: newFeed, articles: newArticles };
+      return { feed: newFeed, articles: newArticles };
+    } catch (error) {
+      throw new Error(`Failed to add feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 );
 
+// Async thunk to import multiple feeds
 export const importFeeds = createAsyncThunk(
   'feeds/importFeeds',
-  async (importedFeeds: Feed[], { getState }) => {
-    const state = getState() as { feeds: FeedsState };
-    const existingUrls = state.feeds.feeds.map(f => f.url);
-    const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
+  async (urls: string[]) => {
+    const currentFeeds = await DataLayer.loadFeeds();
+    const existingUrls = new Set(currentFeeds.map(feed => feed.url));
+    
+    const newFeeds: Feed[] = [];
+    const newArticles: Article[] = [];
+    
+    for (const url of urls) {
+      if (!existingUrls.has(url)) {
+        try {
+          const data = await DataLayer.fetchRSSFeed(url);
+          
+          if (data.status === 'skipped') {
+            continue;
+          }
 
-    const results: { feed: Feed; articles: any[] }[] = [];
+          const feedId = crypto.randomUUID();
+          const newFeed: Feed = {
+            id: feedId,
+            title: data.feed?.title || 'Unknown Feed',
+            url: url,
+            unreadCount: data.items?.length || 0,
+            category: undefined
+          };
 
-    for (const feed of newFeeds) {
-      try {
-        const data = await DataLayer.fetchRSSFeed(feed.url);
-        const articles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
-        results.push({ feed, articles });
-      } catch (error) {
-        console.error(`Failed to fetch articles for feed ${feed.title}:`, error);
-        results.push({ feed, articles: [] });
+          newFeeds.push(newFeed);
+          await DataLayer.saveFeed(newFeed);
+          
+          const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
+          const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
+            .filter(article => !existingUrls.has(article.url));
+          newArticles.push(...feedArticles);
+        } catch (error) {
+          console.error(`Failed to import feed ${url}:`, error);
+        }
       }
     }
-
-    return results;
+    
+    return { newFeeds, newArticles };
   }
 );
 
+// Async thunk to refresh a single feed
 export const refreshFeed = createAsyncThunk(
   'feeds/refreshFeed',
-  async (feed: Feed) => {
-    const data = await DataLayer.fetchRSSFeed(feed.url);
-    const allNewArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
-    const existingUrls = DataLayer.getExistingArticleUrlsForFeed(feed.id);
-    const uniqueNewArticles = allNewArticles.filter(article => !existingUrls.has(article.url));
-    return { feed, newArticles: uniqueNewArticles, newCount: uniqueNewArticles.length };
+  async (feedId: string) => {
+    const feeds = await DataLayer.loadFeeds();
+    const feed = feeds.find(f => f.id === feedId);
+    
+    if (!feed) {
+      throw new Error('Feed not found');
+    }
+
+    try {
+      const data = await DataLayer.fetchRSSFeed(feed.url);
+      
+      if (data.status === 'skipped') {
+        return { feedId, articles: [], skipped: true };
+      }
+
+      const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
+      const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, feed.title)
+        .filter(article => !existingUrls.has(article.url));
+      
+      return { feedId, articles: newArticles };
+    } catch (error) {
+      throw new Error(`Failed to refresh feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
   }
 );
 
+// Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async (feeds: Feed[]) => {
-    const results = [];
+  async () => {
+    const feeds = await DataLayer.loadFeeds();
+    const newArticles: Article[] = [];
+    
     for (const feed of feeds) {
       try {
         const data = await DataLayer.fetchRSSFeed(feed.url);
-        const allNewArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title);
-        const existingUrls = DataLayer.getExistingArticleUrlsForFeed(feed.id);
-        const uniqueNewArticles = allNewArticles.filter(article => !existingUrls.has(article.url));
-        results.push({ feed, newArticles: uniqueNewArticles, newCount: uniqueNewArticles.length, error: null });
+        
+        if (data.status === 'skipped') {
+          continue;
+        }
+
+        const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feed.id);
+        const feedArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title)
+          .filter(article => !existingUrls.has(article.url));
+        newArticles.push(...feedArticles);
       } catch (error) {
-        results.push({ feed, newArticles: [], newCount: 0, error: String(error) });
+        console.error(`Failed to refresh feed ${feed.title}:`, error);
       }
     }
-    return results;
+    
+    return { newArticles };
   }
 );
 
@@ -93,65 +162,78 @@ const feedsSlice = createSlice({
   reducers: {
     removeFeed: (state, action: PayloadAction<string>) => {
       state.feeds = state.feeds.filter(feed => feed.id !== action.payload);
-      DataLayer.saveFeeds(state.feeds);
+      // Delete from database async
+      DataLayer.deleteFeed(action.payload);
     },
-    renameFeed: (state, action: PayloadAction<{ feedId: string; newTitle: string }>) => {
-      const { feedId, newTitle } = action.payload;
-      const feed = state.feeds.find(f => f.id === feedId);
+    renameFeed: (state, action: PayloadAction<{ id: string; newTitle: string }>) => {
+      const feed = state.feeds.find(f => f.id === action.payload.id);
       if (feed) {
-        feed.title = newTitle;
-        DataLayer.saveFeeds(state.feeds);
+        feed.title = action.payload.newTitle;
+        // Update in database async
+        DataLayer.saveFeed(feed);
       }
     },
     reorderFeeds: (state, action: PayloadAction<Feed[]>) => {
       state.feeds = action.payload;
-      DataLayer.saveFeeds(state.feeds);
+      // Save reordered feeds to database async
+      state.feeds.forEach(feed => DataLayer.saveFeed(feed));
     },
-    updateFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; delta: number }>) => {
-      const { feedId, delta } = action.payload;
-      const feed = state.feeds.find(f => f.id === feedId);
+    updateUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
+      const feed = state.feeds.find(f => f.id === action.payload.feedId);
       if (feed) {
-        feed.unreadCount = Math.max(0, feed.unreadCount + delta);
-        DataLayer.saveFeeds(state.feeds);
+        feed.unreadCount = Math.max(0, action.payload.count);
+        // Update in database async
+        DataLayer.saveFeed(feed);
       }
     },
-    setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
-      const { feedId, count } = action.payload;
-      const feed = state.feeds.find(f => f.id === feedId);
+    incrementUnreadCount: (state, action: PayloadAction<string>) => {
+      const feed = state.feeds.find(f => f.id === action.payload);
       if (feed) {
-        feed.unreadCount = count;
-        DataLayer.saveFeeds(state.feeds);
+        feed.unreadCount++;
+        // Update in database async
+        DataLayer.saveFeed(feed);
       }
     },
-    updateMultipleFeedUnreadCounts: (state, action: PayloadAction<{ feedIds: string[]; counts: number[] }>) => {
-      const { feedIds, counts } = action.payload;
-      feedIds.forEach((feedId, index) => {
-        const feed = state.feeds.find(f => f.id === feedId);
-        if (feed) {
-          feed.unreadCount = counts[index];
-        }
-      });
-      DataLayer.saveFeeds(state.feeds);
+    decrementUnreadCount: (state, action: PayloadAction<string>) => {
+      const feed = state.feeds.find(f => f.id === action.payload);
+      if (feed) {
+        feed.unreadCount = Math.max(0, feed.unreadCount - 1);
+        // Update in database async
+        DataLayer.saveFeed(feed);
+      }
     },
-    markAllAsRead: (state, action: PayloadAction<string>) => {
+    setUnreadCountToZero: (state, action: PayloadAction<string>) => {
       const feed = state.feeds.find(f => f.id === action.payload);
       if (feed) {
         feed.unreadCount = 0;
-        DataLayer.saveFeeds(state.feeds);
+        // Update in database async
+        DataLayer.saveFeed(feed);
       }
     },
   },
   extraReducers: (builder) => {
     builder
+      // Load feeds
+      .addCase(loadFeeds.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(loadFeeds.fulfilled, (state, action) => {
+        state.feeds = action.payload;
+        state.isLoading = false;
+      })
+      .addCase(loadFeeds.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.error.message || 'Failed to load feeds';
+      })
       // Add feed
       .addCase(addFeed.pending, (state) => {
         state.isLoading = true;
         state.error = null;
       })
       .addCase(addFeed.fulfilled, (state, action) => {
-        state.isLoading = false;
         state.feeds.push(action.payload.feed);
-        DataLayer.saveFeeds(state.feeds);
+        state.isLoading = false;
       })
       .addCase(addFeed.rejected, (state, action) => {
         state.isLoading = false;
@@ -163,11 +245,8 @@ const feedsSlice = createSlice({
         state.error = null;
       })
       .addCase(importFeeds.fulfilled, (state, action) => {
+        state.feeds.push(...action.payload.newFeeds);
         state.isLoading = false;
-        action.payload.forEach(({ feed }) => {
-          state.feeds.push(feed);
-        });
-        DataLayer.saveFeeds(state.feeds);
       })
       .addCase(importFeeds.rejected, (state, action) => {
         state.isLoading = false;
@@ -176,6 +255,7 @@ const feedsSlice = createSlice({
       // Refresh feed
       .addCase(refreshFeed.pending, (state) => {
         state.isLoading = true;
+        state.error = null;
       })
       .addCase(refreshFeed.fulfilled, (state) => {
         state.isLoading = false;
@@ -203,10 +283,10 @@ export const {
   removeFeed,
   renameFeed,
   reorderFeeds,
-  updateFeedUnreadCount,
-  setFeedUnreadCount,
-  updateMultipleFeedUnreadCounts,
-  markAllAsRead,
+  updateUnreadCount,
+  incrementUnreadCount,
+  decrementUnreadCount,
+  setUnreadCountToZero,
 } = feedsSlice.actions;
 
 export default feedsSlice.reducer;

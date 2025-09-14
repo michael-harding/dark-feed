@@ -14,6 +14,104 @@ export type Database = {
   }
   public: {
     Tables: {
+      articles: {
+        Row: {
+          author: string | null
+          content: string | null
+          created_at: string
+          description: string | null
+          feed_id: string
+          feed_title: string
+          id: string
+          is_bookmarked: boolean
+          is_read: boolean
+          is_starred: boolean
+          published_at: string
+          sort_order: number
+          title: string
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          author?: string | null
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          feed_id: string
+          feed_title: string
+          id?: string
+          is_bookmarked?: boolean
+          is_read?: boolean
+          is_starred?: boolean
+          published_at: string
+          sort_order?: number
+          title: string
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          author?: string | null
+          content?: string | null
+          created_at?: string
+          description?: string | null
+          feed_id?: string
+          feed_title?: string
+          id?: string
+          is_bookmarked?: boolean
+          is_read?: boolean
+          is_starred?: boolean
+          published_at?: string
+          sort_order?: number
+          title?: string
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "articles_feed_id_fkey"
+            columns: ["feed_id"]
+            isOneToOne: false
+            referencedRelation: "feeds"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      feeds: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          title: string
+          unread_count: number
+          updated_at: string
+          url: string
+          user_id: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          title: string
+          unread_count?: number
+          updated_at?: string
+          url: string
+          user_id: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          title?: string
+          unread_count?: number
+          updated_at?: string
+          url?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           avatar_url: string | null
@@ -36,6 +134,33 @@ export type Database = {
           created_at?: string
           display_name?: string | null
           id?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      user_settings: {
+        Row: {
+          accent_color: string
+          created_at: string
+          id: string
+          sort_mode: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          accent_color?: string
+          created_at?: string
+          id?: string
+          sort_mode?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          accent_color?: string
+          created_at?: string
+          id?: string
+          sort_mode?: string
           updated_at?: string
           user_id?: string
         }

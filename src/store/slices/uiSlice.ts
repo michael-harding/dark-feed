@@ -1,4 +1,4 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { DataLayer } from '@/services/dataLayer';
 
 interface UIState {
@@ -12,10 +12,20 @@ interface UIState {
 const initialState: UIState = {
   selectedFeed: 'all',
   selectedArticle: null,
-  sortMode: DataLayer.loadSortMode(),
-  accentColor: DataLayer.loadAccentColor(),
+  sortMode: 'chronological',
+  accentColor: '46 87% 65%',
   initialLoading: true,
 };
+
+// Async thunk to load user settings
+export const loadUserSettings = createAsyncThunk(
+  'ui/loadUserSettings',
+  async () => {
+    const sortMode = await DataLayer.loadSortMode();
+    const accentColor = await DataLayer.loadAccentColor();
+    return { sortMode, accentColor };
+  }
+);
 
 const uiSlice = createSlice({
   name: 'ui',
@@ -43,6 +53,13 @@ const uiSlice = createSlice({
     setInitialLoading: (state, action: PayloadAction<boolean>) => {
       state.initialLoading = action.payload;
     },
+  },
+  extraReducers: (builder) => {
+    builder
+      .addCase(loadUserSettings.fulfilled, (state, action) => {
+        state.sortMode = action.payload.sortMode;
+        state.accentColor = action.payload.accentColor;
+      });
   },
 });
 
