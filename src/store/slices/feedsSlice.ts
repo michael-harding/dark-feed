@@ -27,7 +27,7 @@ export const addFeed = createAsyncThunk(
   async (url: string) => {
     try {
       const data = await DataLayer.fetchRSSFeed(url);
-      
+
       if (data.status === 'skipped') {
         throw new Error('Feed fetching skipped on development server');
       }
@@ -42,7 +42,7 @@ export const addFeed = createAsyncThunk(
       };
 
       await DataLayer.saveFeed(newFeed);
-      
+
       const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
         .filter(article => !existingUrls.has(article.url));
@@ -60,14 +60,14 @@ export const importFeeds = createAsyncThunk(
   async (feedsToImport: Feed[]) => {
     const currentFeeds = await DataLayer.loadFeeds();
     const existingUrls = new Set(currentFeeds.map(feed => feed.url));
-    
+
     const results: Array<{ articles: Article[]; feed: Feed; error?: string }> = [];
-    
+
     for (const feed of feedsToImport) {
       if (!existingUrls.has(feed.url)) {
         try {
           const data = await DataLayer.fetchRSSFeed(feed.url);
-          
+
           if (data.status === 'skipped') {
             results.push({ articles: [], feed, error: 'Feed fetching skipped on development server' });
             continue;
@@ -85,25 +85,25 @@ export const importFeeds = createAsyncThunk(
           };
 
           await DataLayer.saveFeed(newFeed);
-          
+
           const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
           const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
             .filter(article => !existingUrls.has(article.url));
-          
+
           results.push({ articles: feedArticles, feed: newFeed });
         } catch (error) {
           console.error(`Failed to import feed ${feed.url}:`, error);
-          results.push({ 
-            articles: [], 
-            feed, 
-            error: error instanceof Error ? error.message : 'Unknown error' 
+          results.push({
+            articles: [],
+            feed,
+            error: error instanceof Error ? error.message : 'Unknown error'
           });
         }
       } else {
         results.push({ articles: [], feed, error: 'Feed already exists' });
       }
     }
-    
+
     return results;
   }
 );
@@ -114,14 +114,14 @@ export const refreshFeed = createAsyncThunk(
   async (feedId: string) => {
     const feeds = await DataLayer.loadFeeds();
     const feed = feeds.find(f => f.id === feedId);
-    
+
     if (!feed) {
       throw new Error('Feed not found');
     }
 
     try {
       const data = await DataLayer.fetchRSSFeed(feed.url);
-      
+
       if (data.status === 'skipped') {
         return { feedId, articles: [], skipped: true };
       }
@@ -129,7 +129,7 @@ export const refreshFeed = createAsyncThunk(
       const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, feed.title)
         .filter(article => !existingUrls.has(article.url));
-      
+
       return { feedId, articles: newArticles };
     } catch (error) {
       throw new Error(`Failed to refresh feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -140,28 +140,34 @@ export const refreshFeed = createAsyncThunk(
 // Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async () => {
-    const feeds = await DataLayer.loadFeeds();
-    const newArticles: Article[] = [];
-    
+  async (feeds: Feed[]) => {
+    const results: Array<{ newArticles: Article[]; feed: Feed; error?: string }> = [];
+
     for (const feed of feeds) {
       try {
         const data = await DataLayer.fetchRSSFeed(feed.url);
-        
+
         if (data.status === 'skipped') {
+          results.push({ newArticles: [], feed, error: 'Feed fetching skipped' });
           continue;
         }
 
         const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feed.id);
         const feedArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title)
           .filter(article => !existingUrls.has(article.url));
-        newArticles.push(...feedArticles);
+
+        results.push({ newArticles: feedArticles, feed });
       } catch (error) {
         console.error(`Failed to refresh feed ${feed.title}:`, error);
+        results.push({
+          newArticles: [],
+          feed,
+          error: error instanceof Error ? error.message : 'Unknown error'
+        });
       }
     }
-    
-    return { newArticles };
+
+    return results;
   }
 );
 

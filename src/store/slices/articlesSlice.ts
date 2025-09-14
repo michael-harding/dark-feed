@@ -48,30 +48,30 @@ const articlesSlice = createSlice({
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isStarred = !article.isStarred;
-        // Update in database async
-        DataLayer.updateArticle(article);
+        // Update in database async - create a plain copy
+        DataLayer.updateArticle({ ...article });
       }
     },
     toggleBookmark: (state, action: PayloadAction<string>) => {
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isBookmarked = !article.isBookmarked;
-        // Update in database async
-        DataLayer.updateArticle(article);
+        // Update in database async - create a plain copy
+        DataLayer.updateArticle({ ...article });
       }
     },
     markAsRead: (state, action: PayloadAction<string>) => {
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isRead = !article.isRead;
-        // Update in database async
-        DataLayer.updateArticle(article);
+        // Update in database async - create a plain copy
+        DataLayer.updateArticle({ ...article });
       }
     },
     removeArticlesByFeed: (state, action: PayloadAction<string>) => {
       state.articles = state.articles.filter(article => article.feedId !== action.payload);
-      // Save updated articles to database async
-      DataLayer.saveArticles(state.articles);
+      // Save updated articles to database async - create a plain copy
+      DataLayer.saveArticles([...state.articles]);
     },
     updateArticlesFeedTitle: (state, action: PayloadAction<{ feedId: string; newTitle: string }>) => {
       const { feedId, newTitle } = action.payload;
@@ -80,8 +80,8 @@ const articlesSlice = createSlice({
           article.feedTitle = newTitle;
         }
       });
-      // Save updated articles to database async
-      DataLayer.saveArticles(state.articles);
+      // Save updated articles to database async - create a plain copy
+      DataLayer.saveArticles([...state.articles]);
     },
     markAllAsReadForFeed: (state, action: PayloadAction<string>) => {
       const feedId = action.payload;
@@ -90,8 +90,8 @@ const articlesSlice = createSlice({
           article.isRead = true;
         }
       });
-      // Save updated articles to database async
-      DataLayer.saveArticles(state.articles);
+      // Save updated articles to database async - create a plain copy
+      DataLayer.saveArticles([...state.articles]);
     },
     updateFilteredArticles: (state, action: PayloadAction<{ selectedFeed: string | null; sortMode: 'chronological' | 'unreadOnTop' }>) => {
       const { selectedFeed, sortMode } = action.payload;
@@ -100,8 +100,8 @@ const articlesSlice = createSlice({
     },
     cleanupOldArticles: (state, action: PayloadAction<Set<string>>) => {
       const currentFeedArticleUrls = action.payload;
-      // This will be handled async in the background
-      DataLayer.cleanupOldArticles(state.articles, currentFeedArticleUrls).then(cleanedArticles => {
+      // This will be handled async in the background - create a plain copy
+      DataLayer.cleanupOldArticles([...state.articles], currentFeedArticleUrls).then(cleanedArticles => {
         // The next load will have cleaned data
       });
     },
@@ -137,8 +137,8 @@ const articlesSlice = createSlice({
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
           state.articles.push(...newArticles);
-          // Save to database async
-          DataLayer.saveArticles(state.articles);
+          // Save to database async - create a plain copy
+          DataLayer.saveArticles([...state.articles]);
         }
       })
       .addCase(refreshFeed.fulfilled, (state, action) => {
@@ -146,44 +146,62 @@ const articlesSlice = createSlice({
           const newArticles = action.payload.articles.filter(
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
-          
+
           state.articles.push(...newArticles);
-          
-          // Cleanup old articles for this feed async
+
+          // Cleanup old articles for this feed async - create a plain copy
           const currentFeedArticleUrls = new Set(action.payload.articles.map((a: Article) => a.url));
-          DataLayer.cleanupOldArticles(state.articles, currentFeedArticleUrls).then(() => {
+          DataLayer.cleanupOldArticles([...state.articles], currentFeedArticleUrls).then(() => {
             // Update state will happen on next load
           });
-          
-          // Save to database async
-          DataLayer.saveArticles(state.articles);
+
+          // Save to database async - create a plain copy
+          DataLayer.saveArticles([...state.articles]);
         }
       })
       .addCase(importFeeds.fulfilled, (state, action) => {
-        if (action.payload.newArticles && action.payload.newArticles.length > 0) {
-          const filteredNewArticles = action.payload.newArticles.filter(
+        // action.payload is an array of results
+        const allNewArticles: Article[] = [];
+
+        action.payload.forEach(result => {
+          if (result.articles && result.articles.length > 0) {
+            allNewArticles.push(...result.articles);
+          }
+        });
+
+        if (allNewArticles.length > 0) {
+          const filteredNewArticles = allNewArticles.filter(
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
           state.articles.push(...filteredNewArticles);
-          // Save to database async
-          DataLayer.saveArticles(state.articles);
+          // Save to database async - create a plain copy
+          DataLayer.saveArticles([...state.articles]);
         }
       })
       .addCase(refreshAllFeeds.fulfilled, (state, action) => {
-        if (action.payload.newArticles && action.payload.newArticles.length > 0) {
-          const filteredNewArticles = action.payload.newArticles.filter(
+        // action.payload is now an array of results per feed
+        const allNewArticles: Article[] = [];
+
+        action.payload.forEach(result => {
+          if (result.newArticles && result.newArticles.length > 0) {
+            allNewArticles.push(...result.newArticles);
+          }
+        });
+
+        if (allNewArticles.length > 0) {
+          const filteredNewArticles = allNewArticles.filter(
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
           state.articles.push(...filteredNewArticles);
-          
-          // Cleanup old articles async
+
+          // Cleanup old articles async - create a plain copy
           const allCurrentUrls = new Set(state.articles.map(a => a.url));
-          DataLayer.cleanupOldArticles(state.articles, allCurrentUrls).then(() => {
+          DataLayer.cleanupOldArticles([...state.articles], allCurrentUrls).then(() => {
             // Update state will happen on next load
           });
-          
-          // Save to database async
-          DataLayer.saveArticles(state.articles);
+
+          // Save to database async - create a plain copy
+          DataLayer.saveArticles([...state.articles]);
         }
       });
   },

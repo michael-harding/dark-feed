@@ -117,14 +117,14 @@ const Index = () => {
       try {
         // Step 1: Load user settings first
         await dispatch(loadUserSettings()).unwrap();
-        
+
         // Step 2: Load feeds and articles from database
         await dispatch(loadFeeds()).unwrap();
         await dispatch(loadArticles()).unwrap();
-        
+
         // Step 3: Get the updated feeds after loading
         const currentFeeds = await dispatch(loadFeeds()).unwrap();
-        
+
         if (currentFeeds.length === 0) {
           dispatch(setInitialLoading(false));
           return;
@@ -298,12 +298,12 @@ const Index = () => {
 
       const successfulCount = successfulResults.length;
       const failedCount = failedResults.length;
-      
+
       let description = `Successfully imported ${successfulCount} feed(s).`;
       if (failedCount > 0) {
         description += ` ${failedCount} feed(s) failed to import.`;
       }
-      
+
       toast({
         title: "Feeds Imported",
         description,
@@ -342,7 +342,7 @@ const Index = () => {
   };
 
   const handleRenameFeed = (feedId: string, newTitle: string) => {
-    dispatch(renameFeed({ feedId, newTitle }));
+    dispatch(renameFeed({ id: feedId, newTitle }));
     dispatch(updateArticlesFeedTitle({ feedId, newTitle }));
 
     toast({
