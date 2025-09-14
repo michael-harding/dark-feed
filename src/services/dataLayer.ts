@@ -424,7 +424,7 @@ export class DataLayer {
 
   static createArticlesFromRSSData = (data: any, feedId: string, feedTitle: string): Article[] => {
     return data.items?.map((item: any, index: number) => ({
-      id: `${feedId}-${Date.now()}-${index}`,
+      id: crypto.randomUUID(),
       title: item.title || 'Untitled',
       description: item.description?.replace(/<[^>]*>/g, '') || '',
       content: item.content || item.description || '',

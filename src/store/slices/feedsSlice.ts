@@ -73,7 +73,9 @@ export const importFeeds = createAsyncThunk(
             continue;
           }
 
-          const feedId = feed.id || crypto.randomUUID();
+          // Validate that feed.id is a proper UUID, generate new one if not
+          const isValidUUID = feed.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(feed.id);
+          const feedId = isValidUUID ? feed.id : crypto.randomUUID();
           const newFeed: Feed = {
             id: feedId,
             title: data.feed?.title || feed.title || 'Unknown Feed',
