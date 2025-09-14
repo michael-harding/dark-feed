@@ -9,6 +9,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   addFeed,
+  loadFeeds,
   refreshAllFeeds,
   removeFeed,
   renameFeed,
@@ -19,6 +20,7 @@ import {
   markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
+  loadArticles,
   toggleStar,
   toggleBookmark,
   markAsRead,
@@ -32,6 +34,7 @@ import {
   selectFeed,
   selectArticle,
   toggleSortMode,
+  loadUserSettings,
   setAccentColor,
   setInitialLoading,
 } from '@/store/slices/uiSlice';
@@ -111,14 +114,24 @@ const Index = () => {
   // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
     const initializeApp = async () => {
-      if (feeds.length === 0) {
-        dispatch(setInitialLoading(false));
-        return;
-      }
-
       try {
+        // Step 1: Load user settings first
+        await dispatch(loadUserSettings()).unwrap();
+        
+        // Step 2: Load feeds and articles from database
+        await dispatch(loadFeeds()).unwrap();
+        await dispatch(loadArticles()).unwrap();
+        
+        // Step 3: Get the updated feeds after loading
+        const currentFeeds = await dispatch(loadFeeds()).unwrap();
+        
+        if (currentFeeds.length === 0) {
+          dispatch(setInitialLoading(false));
+          return;
+        }
+
         // Step 1: Verify and correct all existing unread counts
-        feeds.forEach(feed => {
+        currentFeeds.forEach(feed => {
           const feedArticles = articles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
@@ -130,14 +143,14 @@ const Index = () => {
 
         // Step 2: Collect all current article URLs per feed before refresh
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
-        feeds.forEach(feed => {
+        currentFeeds.forEach(feed => {
           const feedArticles = articles.filter(a => a.feedId === feed.id);
           const urls = new Set(feedArticles.map(a => a.url));
           allCurrentUrlsByFeed.set(feed.id, urls);
         });
 
         // Step 3: Refresh all feeds
-        const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
+        const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
 
         // Step 4: After refresh, collect updated URLs (existing + new)
         const updatedFeedArticleUrls = new Set<string>();
@@ -174,7 +187,7 @@ const Index = () => {
         dispatch(cleanupOldArticles(updatedFeedArticleUrls));
 
         // Step 6: Final verification of all unread counts after cleanup
-        feeds.forEach(feed => {
+        currentFeeds.forEach(feed => {
           const feedArticles = articles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
