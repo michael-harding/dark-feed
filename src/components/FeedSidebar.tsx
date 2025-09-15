@@ -173,7 +173,7 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
 export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
   const dispatch = useAppDispatch();
   const { accentColor } = useAppSelector((state) => state.ui);
-  const { user, signOut } = useAuth();
+  const { user, profile, signOut } = useAuth();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -324,6 +324,11 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-foreground">RSS Reader</h1>
+            {profile?.display_name && (
+              <p className="text-sm text-muted-foreground font-medium">
+                {profile.display_name}
+              </p>
+            )}
             <p className="text-sm text-muted-foreground">
               {totalUnread} unread articles
             </p>
