@@ -4,21 +4,7 @@ import { parsePublishedDate } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-
-interface Article {
-  id: string;
-  title: string;
-  description: string;
-  content: string;
-  url: string;
-  publishedAt: string;
-  feedId: string;
-  feedTitle: string;
-  isRead: boolean;
-  isStarred: boolean;
-  isBookmarked: boolean;
-  author?: string;
-}
+import { Article } from '@/services/dataLayer';
 
 interface ArticleReaderProps {
   article: Article | null;

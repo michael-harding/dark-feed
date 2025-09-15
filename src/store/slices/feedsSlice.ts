@@ -185,20 +185,25 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.title = action.payload.newTitle;
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     reorderFeeds: (state, action: PayloadAction<Feed[]>) => {
       state.feeds = action.payload;
       // Save reordered feeds to database async
-      state.feeds.forEach(feed => DataLayer.saveFeed({ ...feed }));
+      state.feeds.forEach(feed => {
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
+      });
     },
     updateUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
       const feed = state.feeds.find(f => f.id === action.payload.feedId);
       if (feed) {
         feed.unreadCount = Math.max(0, action.payload.count);
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
@@ -206,7 +211,8 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, action.payload.count);
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     updateFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; delta: number }>) => {
@@ -214,7 +220,8 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount + action.payload.delta);
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     incrementUnreadCount: (state, action: PayloadAction<string>) => {
@@ -222,7 +229,8 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount++;
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     decrementUnreadCount: (state, action: PayloadAction<string>) => {
@@ -230,7 +238,8 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount - 1);
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
     markAllAsRead: (state, action: PayloadAction<string>) => {
@@ -238,7 +247,8 @@ const feedsSlice = createSlice({
       if (feed) {
         feed.unreadCount = 0;
         // Update in database async
-        DataLayer.saveFeed({ ...feed });
+        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
+        DataLayer.saveFeed(plainFeed);
       }
     },
   },
