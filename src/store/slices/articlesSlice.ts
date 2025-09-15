@@ -48,6 +48,11 @@ const articlesSlice = createSlice({
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isStarred = !article.isStarred;
+        // Also update the corresponding article in filteredArticles
+        const filteredArticle = state.filteredArticles.find(a => a.id === action.payload);
+        if (filteredArticle) {
+          filteredArticle.isStarred = article.isStarred;
+        }
         // Update in database async - create a plain copy
         const plainArticle: Article = JSON.parse(JSON.stringify(article));
         DataLayer.updateArticle(plainArticle);
@@ -57,6 +62,11 @@ const articlesSlice = createSlice({
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isBookmarked = !article.isBookmarked;
+        // Also update the corresponding article in filteredArticles
+        const filteredArticle = state.filteredArticles.find(a => a.id === action.payload);
+        if (filteredArticle) {
+          filteredArticle.isBookmarked = article.isBookmarked;
+        }
         // Update in database async - create a plain copy
         const plainArticle: Article = JSON.parse(JSON.stringify(article));
         DataLayer.updateArticle(plainArticle);
