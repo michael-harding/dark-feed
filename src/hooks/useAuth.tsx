@@ -83,19 +83,24 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      
-      if (session?.user) {
-        const userProfile = await fetchProfile(session.user.id);
-        setProfile(userProfile);
-      } else {
-        setProfile(null);
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        setSession(session);
+        setUser(session?.user ?? null);
+        
+        if (session?.user) {
+          const userProfile = await fetchProfile(session.user.id);
+          setProfile(userProfile);
+        } else {
+          setProfile(null);
+        }
+      } catch (error) {
+        console.error('Error getting session:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      setLoading(false);
-    });
+    })();
 
     return () => subscription.unsubscribe();
   }, []);
