@@ -269,10 +269,13 @@ export class DataLayer {
 
       const { error } = await supabase
         .from('user_settings')
-        .upsert({
-          user_id: user.user.id,
-          sort_mode: mode
-        });
+        .upsert(
+          {
+            user_id: user.user.id,
+            sort_mode: mode
+          },
+          { onConflict: 'user_id' }
+        );
 
       if (error) {
         console.error('Error saving sort mode:', error);
@@ -317,10 +320,13 @@ export class DataLayer {
 
       const { error } = await supabase
         .from('user_settings')
-        .upsert({
-          user_id: user.user.id,
-          accent_color: color
-        });
+        .upsert(
+          {
+            user_id: user.user.id,
+            accent_color: color
+          },
+          { onConflict: 'user_id' }
+        );
 
       if (error) {
         console.error('Error saving accent color:', error);
@@ -337,11 +343,14 @@ export class DataLayer {
 
       const { error } = await supabase
         .from('user_settings')
-        .insert({
-          user_id: user.user.id,
-          sort_mode: 'chronological',
-          accent_color: '46 87% 65%'
-        });
+        .upsert(
+          {
+            user_id: user.user.id,
+            sort_mode: 'chronological',
+            accent_color: '46 87% 65%'
+          },
+          { onConflict: 'user_id' }
+        );
 
       if (error) {
         console.error('Error creating default settings:', error);
