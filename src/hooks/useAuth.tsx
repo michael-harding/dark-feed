@@ -70,15 +70,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       async (event, session) => {
         setSession(session);
         setUser(session?.user ?? null);
-        
+        // End loading based on auth state immediately; fetch profile in background
+        setLoading(false);
+
         if (session?.user) {
-          const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
+          fetchProfile(session.user.id).then((userProfile) => setProfile(userProfile));
         } else {
           setProfile(null);
         }
-        
-        setLoading(false);
       }
     );
 
@@ -88,19 +87,22 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
         const { data: { session } } = await supabase.auth.getSession();
         setSession(session);
         setUser(session?.user ?? null);
-        
+        // End loading as soon as session is known; fetch profile in background
+        setLoading(false);
+
         if (session?.user) {
-          const userProfile = await fetchProfile(session.user.id);
-          setProfile(userProfile);
+          fetchProfile(session.user.id).then((userProfile) => setProfile(userProfile));
         } else {
           setProfile(null);
         }
       } catch (error) {
         console.error('Error getting session:', error);
-      } finally {
         setLoading(false);
       }
     })();
+
+    // Failsafe: ensure loading does not hang more than 5s
+    const timeoutId = setTimeout(() => setLoading(false), 5000);
 
     return () => subscription.unsubscribe();
   }, []);
