@@ -122,17 +122,18 @@ const Index = () => {
         await dispatch(loadFeeds()).unwrap();
         await dispatch(loadArticles()).unwrap();
 
-        // Step 3: Get the updated feeds after loading
+        // Step 3: Get the updated feeds and articles after loading
         const currentFeeds = await dispatch(loadFeeds()).unwrap();
+        const currentArticles = await dispatch(loadArticles()).unwrap();
 
         if (currentFeeds.length === 0) {
           dispatch(setInitialLoading(false));
           return;
         }
 
-        // Step 1: Verify and correct all existing unread counts
+        // Step 1: Verify and correct all existing unread counts using fresh articles
         currentFeeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
@@ -144,8 +145,8 @@ const Index = () => {
         // Step 2: Collect all current article URLs per feed before refresh
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
         currentFeeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
-          const urls = new Set(feedArticles.map(a => a.url));
+          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
+          const urls = new Set<string>(feedArticles.map(a => a.url));
           allCurrentUrlsByFeed.set(feed.id, urls);
         });
 
@@ -164,7 +165,7 @@ const Index = () => {
             });
           } else {
             // Add all current URLs for this feed (from before) plus new ones
-            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set();
+            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
             newArticles.forEach(article => {
               if (article.url) {
                 currentUrls.add(article.url);
@@ -186,9 +187,10 @@ const Index = () => {
         // Step 5: Clean up old articles using full current URLs
         dispatch(cleanupOldArticles(updatedFeedArticleUrls));
 
-        // Step 6: Final verification of all unread counts after cleanup
+        // Step 6: Final verification of all unread counts after cleanup using fresh articles
+        const refreshedArticles = await dispatch(loadArticles()).unwrap();
         currentFeeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
+          const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
