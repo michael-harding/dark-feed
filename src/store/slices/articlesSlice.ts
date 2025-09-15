@@ -66,6 +66,11 @@ const articlesSlice = createSlice({
       const article = state.articles.find(a => a.id === action.payload);
       if (article) {
         article.isRead = !article.isRead;
+        // Reflect change in filteredArticles without re-sorting
+        const filteredArticle = state.filteredArticles.find(a => a.id === article.id);
+        if (filteredArticle) {
+          filteredArticle.isRead = article.isRead;
+        }
         // Update in database async - create a plain copy
         const plainArticle: Article = JSON.parse(JSON.stringify(article));
         DataLayer.updateArticle(plainArticle);
@@ -91,6 +96,12 @@ const articlesSlice = createSlice({
     markAllAsReadForFeed: (state, action: PayloadAction<string>) => {
       const feedId = action.payload;
       state.articles.forEach(article => {
+        if (article.feedId === feedId) {
+          article.isRead = true;
+        }
+      });
+      // Reflect change in filteredArticles without re-sorting
+      state.filteredArticles.forEach(article => {
         if (article.feedId === feedId) {
           article.isRead = true;
         }

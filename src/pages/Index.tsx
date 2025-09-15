@@ -253,8 +253,6 @@ const Index = () => {
       // Update feed unread count
       const delta = article.isRead ? 1 : -1;
       dispatch(updateFeedUnreadCount({ feedId: article.feedId, delta }));
-      // Refresh filtered list so read styling and ordering update immediately
-      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
     }
   };
 
