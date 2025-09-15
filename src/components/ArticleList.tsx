@@ -145,8 +145,8 @@ export const ArticleList = ({
 
                   {/* Title */}
                   <h3 className={cn(
-                    "font-medium leading-tight",
-                    !article.isRead ? "text-bright-foreground" : "text-muted-foreground"
+                    "font-medium leading-tight transition-colors",
+                    !article.isRead ? "text-foreground font-semibold" : "text-muted-foreground"
                   )}>
                     {article.title}
                   </h3>
