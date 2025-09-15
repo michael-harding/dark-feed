@@ -326,12 +326,10 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
             <h1 className="text-xl font-bold text-foreground">RSS Reader</h1>
             {profile?.display_name && (
               <p className="text-sm text-muted-foreground font-medium">
+                <User className="w-4 h-4 inline mt-0 mr-1" />
                 {profile.display_name}
               </p>
             )}
-            <p className="text-sm text-muted-foreground">
-              {totalUnread} unread articles
-            </p>
           </div>
         </div>
       </div>
