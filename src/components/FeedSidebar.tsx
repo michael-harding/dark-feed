@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check, CheckCheck } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check, CheckCheck, LogOut, User } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import { setAccentColor } from '@/store/slices/uiSlice';
+import { useAuth } from '@/hooks/useAuth';
 import { Feed } from '@/services/dataLayer';
 
 interface FeedSidebarProps {
@@ -172,6 +173,7 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
 export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
   const dispatch = useAppDispatch();
   const { accentColor } = useAppSelector((state) => state.ui);
+  const { user, profile, signOut } = useAuth();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -322,9 +324,12 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
           </div>
           <div className="flex-1">
             <h1 className="text-xl font-bold text-foreground">RSS Reader</h1>
-            <p className="text-sm text-muted-foreground">
-              {totalUnread} unread articles
-            </p>
+            {profile?.display_name && (
+              <p className="text-sm text-muted-foreground font-medium">
+                <User className="w-4 h-4 inline mt-0 mr-1" />
+                {profile.display_name}
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -420,6 +425,32 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
               <DialogTitle>Settings</DialogTitle>
             </DialogHeader>
             <div className="mt-4 space-y-6">
+              {/* User Account Section */}
+              <div>
+                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+                  <User className="w-4 h-4" />
+                  Account
+                </h3>
+                <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+                  <div className="text-sm">
+                    <span className="text-muted-foreground">Signed in as:</span>
+                    <div className="font-medium text-foreground mt-1">{user?.email}</div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={async () => {
+                      await signOut();
+                      setShowSettings(false);
+                    }}
+                  >
+                    <LogOut className="w-4 h-4 mr-2" />
+                    Sign Out
+                  </Button>
+                </div>
+              </div>
+
               {/* Feed Management Section */}
               <div>
                 <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">

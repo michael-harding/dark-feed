@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { FeedSidebar } from '@/components/FeedSidebar';
 import { ArticleList } from '@/components/ArticleList';
 import { ArticleReader } from '@/components/ArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   addFeed,
+  loadFeeds,
   refreshAllFeeds,
   removeFeed,
   renameFeed,
@@ -17,6 +20,7 @@ import {
   markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
+  loadArticles,
   toggleStar,
   toggleBookmark,
   markAsRead,
@@ -30,6 +34,7 @@ import {
   selectFeed,
   selectArticle,
   toggleSortMode,
+  loadUserSettings,
   setAccentColor,
   setInitialLoading,
 } from '@/store/slices/uiSlice';
@@ -39,6 +44,15 @@ import heroImage from '@/assets/rss-hero.jpg';
 const Index = () => {
   const dispatch = useAppDispatch();
   const { toast } = useToast();
+  const { user, loading: authLoading } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect to auth if not authenticated
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   // Redux state
   const { feeds, isLoading } = useAppSelector((state) => state.feeds);
@@ -100,15 +114,26 @@ const Index = () => {
   // Clean up old read articles and refresh feeds on page load
   useEffect(() => {
     const initializeApp = async () => {
-      if (feeds.length === 0) {
-        dispatch(setInitialLoading(false));
-        return;
-      }
-
       try {
-        // Step 1: Verify and correct all existing unread counts
-        feeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
+        // Step 1: Load user settings first
+        await dispatch(loadUserSettings()).unwrap();
+
+        // Step 2: Load feeds and articles from database
+        await dispatch(loadFeeds()).unwrap();
+        await dispatch(loadArticles()).unwrap();
+
+        // Step 3: Get the updated feeds and articles after loading
+        const currentFeeds = await dispatch(loadFeeds()).unwrap();
+        const currentArticles = await dispatch(loadArticles()).unwrap();
+
+        if (currentFeeds.length === 0) {
+          dispatch(setInitialLoading(false));
+          return;
+        }
+
+        // Step 1: Verify and correct all existing unread counts using fresh articles
+        currentFeeds.forEach(feed => {
+          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
@@ -119,14 +144,14 @@ const Index = () => {
 
         // Step 2: Collect all current article URLs per feed before refresh
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
-        feeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
-          const urls = new Set(feedArticles.map(a => a.url));
+        currentFeeds.forEach(feed => {
+          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
+          const urls = new Set<string>(feedArticles.map(a => a.url));
           allCurrentUrlsByFeed.set(feed.id, urls);
         });
 
         // Step 3: Refresh all feeds
-        const result = await dispatch(refreshAllFeeds(feeds)).unwrap();
+        const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
 
         // Step 4: After refresh, collect updated URLs (existing + new)
         const updatedFeedArticleUrls = new Set<string>();
@@ -140,7 +165,7 @@ const Index = () => {
             });
           } else {
             // Add all current URLs for this feed (from before) plus new ones
-            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set();
+            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
             newArticles.forEach(article => {
               if (article.url) {
                 currentUrls.add(article.url);
@@ -162,9 +187,10 @@ const Index = () => {
         // Step 5: Clean up old articles using full current URLs
         dispatch(cleanupOldArticles(updatedFeedArticleUrls));
 
-        // Step 6: Final verification of all unread counts after cleanup
-        feeds.forEach(feed => {
-          const feedArticles = articles.filter(a => a.feedId === feed.id);
+        // Step 6: Final verification of all unread counts after cleanup using fresh articles
+        const refreshedArticles = await dispatch(loadArticles()).unwrap();
+        currentFeeds.forEach(feed => {
+          const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
@@ -246,17 +272,21 @@ const Index = () => {
     }
 
     try {
-      const result = await dispatch(importFeeds(newFeeds)).unwrap();
+      const results = await dispatch(importFeeds(newFeeds)).unwrap();
 
       // Get current articles state to calculate existing articles
       const currentArticles = articles;
 
+      // Separate successful and failed imports
+      const successfulResults = results.filter(result => !result.error);
+      const failedResults = results.filter(result => result.error);
+
       // Calculate correct unread counts for imported feeds
-      result.forEach(({ articles, feed }) => {
-        if (articles.length > 0) {
+      successfulResults.forEach(({ articles: newArticles, feed }) => {
+        if (newArticles.length > 0) {
           // Get all articles for this feed (existing + new)
           const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const newFeedArticles = articles.filter(a => a.feedId === feed.id);
+          const newFeedArticles = newArticles.filter(a => a.feedId === feed.id);
           const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
           const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
 
@@ -268,10 +298,18 @@ const Index = () => {
       // Update filtered articles to include new feeds' articles
       dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
-      const successfulCount = result.filter(r => r.articles.length > 0).length;
+      const successfulCount = successfulResults.length;
+      const failedCount = failedResults.length;
+
+      let description = `Successfully imported ${successfulCount} feed(s).`;
+      if (failedCount > 0) {
+        description += ` ${failedCount} feed(s) failed to import.`;
+      }
+
       toast({
         title: "Feeds Imported",
-        description: `Successfully imported ${newFeeds.length} feed(s) with ${successfulCount} having articles.`,
+        description,
+        variant: failedCount > 0 ? "destructive" : "default",
       });
     } catch (error) {
       toast({
@@ -306,7 +344,7 @@ const Index = () => {
   };
 
   const handleRenameFeed = (feedId: string, newTitle: string) => {
-    dispatch(renameFeed({ feedId, newTitle }));
+    dispatch(renameFeed({ id: feedId, newTitle }));
     dispatch(updateArticlesFeedTitle({ feedId, newTitle }));
 
     toast({
@@ -331,6 +369,23 @@ const Index = () => {
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
+
+  // Show loading while authenticating
+  if (authLoading) {
+    return (
+      <div className="h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <LoadingSpinner size="lg" />
+          <p className="mt-4 text-muted-foreground">Authenticating...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render if not authenticated
+  if (!user) {
+    return null;
+  }
 
   if (initialLoading) {
     return (

@@ -4,22 +4,7 @@ import { parsePublishedDate } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-
-interface Article {
-  id: string;
-  title: string;
-  description: string;
-  content: string;
-  url: string;
-  publishedAt: string;
-  feedId: string;
-  feedTitle: string;
-  isRead: boolean;
-  isStarred: boolean;
-  isBookmarked: boolean;
-  author?: string;
-  sortOrder: number;
-}
+import { Article } from '@/services/dataLayer';
 
 interface ArticleListProps {
   articles: Article[];
@@ -160,8 +145,8 @@ export const ArticleList = ({
 
                   {/* Title */}
                   <h3 className={cn(
-                    "font-medium leading-tight",
-                    !article.isRead ? "text-bright-foreground" : "text-muted-foreground"
+                    "font-medium leading-tight transition-colors",
+                    !article.isRead ? "text-foreground font-semibold" : "text-muted-foreground"
                   )}>
                     {article.title}
                   </h3>

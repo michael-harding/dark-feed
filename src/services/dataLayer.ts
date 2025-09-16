@@ -1,4 +1,6 @@
 // Centralized data access layer
+import { supabase } from '@/integrations/supabase/client';
+
 export interface Feed {
   id: string;
   title: string;
@@ -23,84 +25,339 @@ export interface Article {
   sortOrder: number;
 }
 
-// Local storage keys
-const FEEDS_KEY = 'rss-reader-feeds';
-const ARTICLES_KEY = 'rss-reader-articles';
+// Local storage key for feed fetch times (to prevent rate limiting during development)
 const FEED_FETCH_TIMES_KEY = 'rss-feed-fetch-times';
-const SORT_MODE_KEY = 'rss-sort-mode';
-const ACCENT_COLOR_KEY = 'rss-accent-color';
 
 export class DataLayer {
-  // Local storage operations
-  static loadFromStorage = <T,>(key: string, defaultValue: T): T => {
+  // Feed operations
+  static loadFeeds = async (): Promise<Feed[]> => {
     try {
-      const stored = localStorage.getItem(key);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        // No conversion needed since dates are stored as ISO strings
-        if (key === ARTICLES_KEY && Array.isArray(parsed)) {
-          return parsed as T;
-        }
-        return parsed;
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
+
+      const { data, error } = await supabase
+        .from('feeds')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .order('created_at', { ascending: true });
+
+      if (error) {
+        console.error('Error loading feeds:', error);
+        return [];
+      }
+
+      return data.map(feed => ({
+        id: feed.id,
+        title: feed.title,
+        url: feed.url,
+        unreadCount: feed.unread_count,
+        category: feed.category
+      }));
+    } catch (error) {
+      console.error('Error loading feeds:', error);
+      return [];
+    }
+  };
+
+  static saveFeeds = async (feeds: Feed[]): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      // For simplicity, we'll handle this through individual feed operations
+      // This method is mainly used for reordering, which we'll handle differently
+    } catch (error) {
+      console.error('Error saving feeds:', error);
+    }
+  };
+
+  static saveFeed = async (feed: Feed): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('feeds')
+        .upsert({
+          id: feed.id,
+          user_id: user.user.id,
+          title: feed.title,
+          url: feed.url,
+          unread_count: feed.unreadCount,
+          category: feed.category
+        });
+
+      if (error) {
+        console.error('Error saving feed:', error);
       }
     } catch (error) {
-      console.error(`Error loading ${key} from localStorage:`, error);
+      console.error('Error saving feed:', error);
     }
-    return defaultValue;
   };
 
-  static saveToStorage = <T,>(key: string, value: T): void => {
+  static deleteFeed = async (feedId: string): Promise<void> => {
     try {
-      localStorage.setItem(key, JSON.stringify(value));
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('feeds')
+        .delete()
+        .eq('id', feedId)
+        .eq('user_id', user.user.id);
+
+      if (error) {
+        console.error('Error deleting feed:', error);
+      }
     } catch (error) {
-      console.error(`Error saving ${key} to localStorage:`, error);
+      console.error('Error deleting feed:', error);
     }
-  };
-
-  // Feed operations
-  static loadFeeds = (): Feed[] => {
-    return DataLayer.loadFromStorage(FEEDS_KEY, []);
-  };
-
-  static saveFeeds = (feeds: Feed[]): void => {
-    DataLayer.saveToStorage(FEEDS_KEY, feeds);
   };
 
   // Article operations
-  static loadArticles = (): Article[] => {
-    const stored = DataLayer.loadFromStorage(ARTICLES_KEY, []);
-    // Add sortOrder property if missing
-    return stored.map((a: any, i: number) => ({ ...a, sortOrder: i }));
+  static loadArticles = async (): Promise<Article[]> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return [];
+
+      const { data, error } = await supabase
+        .from('articles')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .order('published_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading articles:', error);
+        return [];
+      }
+
+      return data.map((article, index) => ({
+        id: article.id,
+        title: article.title,
+        description: article.description || '',
+        content: article.content || '',
+        url: article.url,
+        publishedAt: article.published_at,
+        feedId: article.feed_id,
+        feedTitle: article.feed_title,
+        isRead: article.is_read,
+        isStarred: article.is_starred,
+        isBookmarked: article.is_bookmarked,
+        author: article.author || '',
+        sortOrder: index
+      }));
+    } catch (error) {
+      console.error('Error loading articles:', error);
+      return [];
+    }
   };
 
-  static saveArticles = (articles: Article[]): void => {
-    DataLayer.saveToStorage(ARTICLES_KEY, articles);
+  static saveArticles = async (articles: Article[]): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const articlesData = articles.map(article => ({
+        id: article.id,
+        user_id: user.user.id,
+        feed_id: article.feedId,
+        title: article.title,
+        description: article.description,
+        content: article.content,
+        url: article.url,
+        published_at: article.publishedAt,
+        feed_title: article.feedTitle,
+        is_read: article.isRead,
+        is_starred: article.isStarred,
+        is_bookmarked: article.isBookmarked,
+        author: article.author,
+        sort_order: article.sortOrder
+      }));
+
+      const { error } = await supabase
+        .from('articles')
+        .upsert(articlesData);
+
+      if (error) {
+        console.error('Error saving articles:', error);
+      }
+    } catch (error) {
+      console.error('Error saving articles:', error);
+    }
   };
 
-  static getExistingArticleUrlsForFeed = (feedId: string): Set<string> => {
-    const articles = DataLayer.loadArticles();
-    const urls = articles
-      .filter(article => article.feedId === feedId)
-      .map(article => article.url);
-    return new Set(urls);
+  static updateArticle = async (article: Article): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('articles')
+        .update({
+          is_read: article.isRead,
+          is_starred: article.isStarred,
+          is_bookmarked: article.isBookmarked,
+          sort_order: article.sortOrder
+        })
+        .eq('id', article.id)
+        .eq('user_id', user.user.id);
+
+      if (error) {
+        console.error('Error updating article:', error);
+      }
+    } catch (error) {
+      console.error('Error updating article:', error);
+    }
+  };
+
+  static getExistingArticleUrlsForFeed = async (feedId: string): Promise<Set<string>> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return new Set();
+
+      const { data, error } = await supabase
+        .from('articles')
+        .select('url')
+        .eq('user_id', user.user.id)
+        .eq('feed_id', feedId);
+
+      if (error) {
+        console.error('Error getting existing article URLs:', error);
+        return new Set();
+      }
+
+      return new Set(data.map(article => article.url));
+    } catch (error) {
+      console.error('Error getting existing article URLs:', error);
+      return new Set();
+    }
   };
 
   // Settings operations
-  static loadSortMode = (): 'chronological' | 'unreadOnTop' => {
-    const saved = localStorage.getItem(SORT_MODE_KEY);
-    return saved === 'unreadOnTop' ? 'unreadOnTop' : 'chronological';
+  static loadSortMode = async (): Promise<'chronological' | 'unreadOnTop'> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return 'chronological';
+
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('sort_mode')
+        .eq('user_id', user.user.id)
+        .single();
+
+      if (error) {
+        // If no settings exist, create default settings
+        if (error.code === 'PGRST116') {
+          await DataLayer.createDefaultSettings();
+          return 'chronological';
+        }
+        console.error('Error loading sort mode:', error);
+        return 'chronological';
+      }
+
+      return data.sort_mode as 'chronological' | 'unreadOnTop';
+    } catch (error) {
+      console.error('Error loading sort mode:', error);
+      return 'chronological';
+    }
   };
 
-  static saveSortMode = (mode: 'chronological' | 'unreadOnTop'): void => {
-    localStorage.setItem(SORT_MODE_KEY, mode);
+  static saveSortMode = async (mode: 'chronological' | 'unreadOnTop'): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            sort_mode: mode
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving sort mode:', error);
+      }
+    } catch (error) {
+      console.error('Error saving sort mode:', error);
+    }
   };
 
-  static loadAccentColor = (): string => {
-    return localStorage.getItem(ACCENT_COLOR_KEY) || '46 87% 65%';
+  static loadAccentColor = async (): Promise<string> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return '46 87% 65%';
+
+      const { data, error } = await supabase
+        .from('user_settings')
+        .select('accent_color')
+        .eq('user_id', user.user.id)
+        .single();
+
+      if (error) {
+        // If no settings exist, create default settings
+        if (error.code === 'PGRST116') {
+          await DataLayer.createDefaultSettings();
+          return '46 87% 65%';
+        }
+        console.error('Error loading accent color:', error);
+        return '46 87% 65%';
+      }
+
+      return data.accent_color;
+    } catch (error) {
+      console.error('Error loading accent color:', error);
+      return '46 87% 65%';
+    }
   };
 
-  static saveAccentColor = (color: string): void => {
-    localStorage.setItem(ACCENT_COLOR_KEY, color);
+  static saveAccentColor = async (color: string): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            accent_color: color
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving accent color:', error);
+      }
+    } catch (error) {
+      console.error('Error saving accent color:', error);
+    }
+  };
+
+  static createDefaultSettings = async (): Promise<void> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            sort_mode: 'chronological',
+            accent_color: '46 87% 65%'
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error creating default settings:', error);
+      }
+    } catch (error) {
+      console.error('Error creating default settings:', error);
+    }
   };
 
   // RSS fetching
@@ -176,7 +433,7 @@ export class DataLayer {
 
   static createArticlesFromRSSData = (data: any, feedId: string, feedTitle: string): Article[] => {
     return data.items?.map((item: any, index: number) => ({
-      id: `${feedId}-${Date.now()}-${index}`,
+      id: crypto.randomUUID(),
       title: item.title || 'Untitled',
       description: item.description?.replace(/<[^>]*>/g, '') || '',
       content: item.content || item.description || '',
@@ -192,9 +449,9 @@ export class DataLayer {
     })) || [];
   };
 
-  static cleanupOldArticles = (articles: Article[], currentFeedArticleUrls: Set<string>): Article[] => {
+  static cleanupOldArticles = async (articles: Article[], currentFeedArticleUrls: Set<string>): Promise<Article[]> => {
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    return articles.filter(article => {
+    const articlesToKeep = articles.filter(article => {
       // Keep article if:
       // 1. It's not read, OR
       // 2. It's newer than 48 hours, OR
@@ -208,5 +465,28 @@ export class DataLayer {
         article.isBookmarked
       );
     });
+
+    // Delete articles that should be removed from the database
+    const articlesToDelete = articles.filter(article => !articlesToKeep.includes(article));
+    if (articlesToDelete.length > 0) {
+      try {
+        const { data: user } = await supabase.auth.getUser();
+        if (user.user) {
+          const { error } = await supabase
+            .from('articles')
+            .delete()
+            .eq('user_id', user.user.id)
+            .in('id', articlesToDelete.map(a => a.id));
+
+          if (error) {
+            console.error('Error deleting old articles:', error);
+          }
+        }
+      } catch (error) {
+        console.error('Error deleting old articles:', error);
+      }
+    }
+
+    return articlesToKeep;
   };
 }
