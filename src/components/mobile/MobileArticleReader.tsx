@@ -37,7 +37,7 @@ export const MobileArticleReader = ({ article, onToggleStar, onToggleBookmark, o
   return (
     <div className="h-screen bg-background overflow-hidden flex flex-col">
       {/* Header */}
-      <div className="border-b border-border bg-card p-4">
+      <div className="border-b border-border bg-card p-4 pt-10">
         <div className="flex items-center gap-3 mb-3">
           <Button
             variant="ghost"
@@ -128,7 +128,7 @@ export const MobileArticleReader = ({ article, onToggleStar, onToggleBookmark, o
       </div>
 
       {/* Footer */}
-      <div className="border-t border-border bg-card p-4">
+      <div className="border-t border-border bg-card p-4 pb-10">
         <Button
           variant="outline"
           size="sm"
