@@ -10,7 +10,7 @@ interface UIState {
 }
 
 const initialState: UIState = {
-  selectedFeed: 'all',
+  selectedFeed: null,
   selectedArticle: null,
   sortMode: 'chronological',
   accentColor: '46 87% 65%',

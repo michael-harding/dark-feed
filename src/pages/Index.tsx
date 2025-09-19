@@ -200,7 +200,7 @@ const Index = () => {
         });
 
         // Step 7: Update filtered articles after refresh (to include new ones)
-        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+        dispatch(updateFilteredArticles({ selectedFeed: "all", sortMode }));
 
         toast({
           title: "Feeds Refreshed",
