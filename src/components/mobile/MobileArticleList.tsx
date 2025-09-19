@@ -35,7 +35,7 @@ export const MobileArticleList = ({
   feeds
 }: MobileArticleListProps) => {
   const sortedArticles = [...articles].sort((a, b) => a.sortOrder - b.sortOrder);
-  
+
   const getFeedTitle = () => {
     if (selectedFeed === 'all') return 'All Articles';
     if (selectedFeed === 'starred') return 'Starred Articles';
@@ -47,7 +47,7 @@ export const MobileArticleList = ({
   return (
     <div className="h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border bg-card">
+      <div className="p-4 border-b border-border bg-card pt-10">
         <div className="flex items-center gap-3 mb-3">
           <Button
             variant="ghost"

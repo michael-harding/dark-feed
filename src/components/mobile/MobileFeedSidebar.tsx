@@ -24,17 +24,17 @@ interface MobileFeedSidebarProps {
   isLoading?: boolean;
 }
 
-export const MobileFeedSidebar = ({ 
-  feeds, 
-  selectedFeed, 
-  onFeedSelect, 
-  onAddFeed, 
-  onImportFeeds, 
-  onRemoveFeed, 
-  onRenameFeed, 
-  onMarkAllAsRead, 
-  onReorderFeeds, 
-  isLoading = false 
+export const MobileFeedSidebar = ({
+  feeds,
+  selectedFeed,
+  onFeedSelect,
+  onAddFeed,
+  onImportFeeds,
+  onRemoveFeed,
+  onRenameFeed,
+  onMarkAllAsRead,
+  onReorderFeeds,
+  isLoading = false
 }: MobileFeedSidebarProps) => {
   const dispatch = useAppDispatch();
   const { accentColor } = useAppSelector((state) => state.ui);
@@ -149,7 +149,7 @@ export const MobileFeedSidebar = ({
   return (
     <div className="h-screen bg-sidebar-bg flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-sidebar-border">
+      <div className="p-4 border-b border-sidebar-border pt-10">
         <div className="flex items-center gap-3 mb-4">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-accent to-accent/80 rounded-xl flex items-center justify-center shadow-lg">
