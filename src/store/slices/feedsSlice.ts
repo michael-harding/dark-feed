@@ -148,7 +148,7 @@ export const refreshAllFeeds = createAsyncThunk(
         const data = await DataLayer.fetchRSSFeed(feed.url);
 
         if (data.status === 'skipped') {
-          results.push({ newArticles: [], feed, error: 'Feed fetching skipped' });
+          results.push({ newArticles: [], feed });
           continue;
         }
 

@@ -1,8 +1,8 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FeedSidebar } from '@/components/FeedSidebar';
-import { ArticleList } from '@/components/ArticleList';
-import { ArticleReader } from '@/components/ArticleReader';
+import { MobileFeedSidebar } from '@/components/mobile/MobileFeedSidebar';
+import { MobileArticleList } from '@/components/mobile/MobileArticleList';
+import { MobileArticleReader } from '@/components/mobile/MobileArticleReader';
 import { LoadingSpinner } from '@/components/LoadingSpinner';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
@@ -39,13 +39,15 @@ import {
   setInitialLoading,
 } from '@/store/slices/uiSlice';
 import { Feed } from '@/services/dataLayer';
-import heroImage from '@/assets/rss-hero.jpg';
 
-const Index = () => {
+type MobileView = 'feeds' | 'articles' | 'reader';
+
+const Mobile = () => {
   const dispatch = useAppDispatch();
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [currentView, setCurrentView] = useState<MobileView>('feeds');
 
   // Redirect to auth if not authenticated
   useEffect(() => {
@@ -106,23 +108,19 @@ const Index = () => {
     }
   }, [accentColor]);
 
-  // Update filtered articles when selectedFeed or sortMode changes (stable on read toggles)
+  // Update filtered articles when selectedFeed or sortMode changes
   useEffect(() => {
     dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
   }, [dispatch, selectedFeed, sortMode]);
 
-  // Clean up old read articles and refresh feeds on page load
+  // Initialize app on page load
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Step 1: Load user settings first
         await dispatch(loadUserSettings()).unwrap();
-
-        // Step 2: Load feeds and articles from database
         await dispatch(loadFeeds()).unwrap();
         await dispatch(loadArticles()).unwrap();
 
-        // Step 3: Get the updated feeds and articles after loading
         const currentFeeds = await dispatch(loadFeeds()).unwrap();
         const currentArticles = await dispatch(loadArticles()).unwrap();
 
@@ -131,18 +129,17 @@ const Index = () => {
           return;
         }
 
-        // Step 1: Verify and correct all existing unread counts using fresh articles
+        // Verify and correct unread counts
         currentFeeds.forEach(feed => {
           const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
-            console.log(`Correcting unread count for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
             dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
           }
         });
 
-        // Step 2: Collect all current article URLs per feed before refresh
+        // Refresh feeds and clean up old articles
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
         currentFeeds.forEach(feed => {
           const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
@@ -150,10 +147,8 @@ const Index = () => {
           allCurrentUrlsByFeed.set(feed.id, urls);
         });
 
-        // Step 3: Refresh all feeds
         const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
 
-        // Step 4: After refresh, collect updated URLs (existing + new)
         const updatedFeedArticleUrls = new Set<string>();
         result.forEach(({ newArticles, feed, error }) => {
           if (error) {
@@ -164,7 +159,6 @@ const Index = () => {
               variant: 'destructive',
             });
           } else {
-            // Add all current URLs for this feed (from before) plus new ones
             const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
             newArticles.forEach(article => {
               if (article.url) {
@@ -173,7 +167,6 @@ const Index = () => {
             });
             currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
 
-            // Update feed unread count for new articles
             if (newArticles.length > 0) {
               dispatch(updateFeedUnreadCount({ feedId: feed.id, delta: newArticles.length }));
               toast({
@@ -184,22 +177,7 @@ const Index = () => {
           }
         });
 
-        // Step 5: Clean up old articles using full current URLs
         dispatch(cleanupOldArticles(updatedFeedArticleUrls));
-
-        // Step 6: Final verification of all unread counts after cleanup using fresh articles
-        const refreshedArticles = await dispatch(loadArticles()).unwrap();
-        currentFeeds.forEach(feed => {
-          const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
-          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
-
-          if (actualUnreadCount !== feed.unreadCount) {
-            console.log(`Final correction for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
-            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
-          }
-        });
-
-        // Step 7: Update filtered articles after refresh (to include new ones)
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         toast({
@@ -219,13 +197,21 @@ const Index = () => {
     };
 
     initializeApp();
-  }, []); // Only run on initial page load
+  }, []);
+
+  // Handle view changes based on selections
+  useEffect(() => {
+    if (selectedArticle) {
+      setCurrentView('reader');
+    } else if (selectedFeed) {
+      setCurrentView('articles');
+    }
+  }, [selectedFeed, selectedArticle]);
 
   // Handlers
   const handleAddFeed = async (url: string) => {
     try {
       const result = await dispatch(addFeed(url)).unwrap();
-      // Update filtered articles to include new feed's articles
       dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
       toast({
         title: "Feed Added",
@@ -252,14 +238,12 @@ const Index = () => {
     const article = articles.find(a => a.id === articleId);
     if (article) {
       dispatch(markAsRead(articleId));
-      // Update feed unread count
       const delta = article.isRead ? 1 : -1;
       dispatch(updateFeedUnreadCount({ feedId: article.feedId, delta }));
     }
   };
 
   const handleImportFeeds = async (importedFeeds: Feed[]) => {
-    // Filter out feeds that already exist (by URL)
     const existingUrls = feeds.map(f => f.url);
     const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
 
@@ -273,29 +257,22 @@ const Index = () => {
 
     try {
       const results = await dispatch(importFeeds(newFeeds)).unwrap();
-
-      // Get current articles state to calculate existing articles
       const currentArticles = articles;
 
-      // Separate successful and failed imports
       const successfulResults = results.filter(result => !result.error);
       const failedResults = results.filter(result => result.error);
 
-      // Calculate correct unread counts for imported feeds
       successfulResults.forEach(({ articles: newArticles, feed }) => {
         if (newArticles.length > 0) {
-          // Get all articles for this feed (existing + new)
           const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
           const newFeedArticles = newArticles.filter(a => a.feedId === feed.id);
           const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
           const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
 
-          // Update the feed's unread count
           dispatch(setFeedUnreadCount({ feedId: feed.id, count: unreadCount }));
         }
       });
 
-      // Update filtered articles to include new feeds' articles
       dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
       const successfulCount = successfulResults.length;
@@ -324,9 +301,9 @@ const Index = () => {
     dispatch(removeFeed(feedId));
     dispatch(removeArticlesByFeed(feedId));
 
-    // If the removed feed was selected, switch to "all"
     if (selectedFeed === feedId) {
       dispatch(selectFeed('all'));
+      setCurrentView('feeds');
     }
 
     toast({
@@ -368,6 +345,31 @@ const Index = () => {
     dispatch(toggleSortMode());
   };
 
+  const handleFeedSelect = (feedId: string) => {
+    dispatch(selectFeed(feedId));
+    setCurrentView('articles');
+  };
+
+  const handleArticleSelect = (articleId: string) => {
+    dispatch(selectArticle(articleId));
+    const article = articles.find(a => a.id === articleId);
+    if (article && !article.isRead) {
+      handleMarkAsRead(articleId);
+    }
+    setCurrentView('reader');
+  };
+
+  const handleBackToFeeds = () => {
+    dispatch(selectFeed(null));
+    dispatch(selectArticle(null));
+    setCurrentView('feeds');
+  };
+
+  const handleBackToArticles = () => {
+    dispatch(selectArticle(null));
+    setCurrentView('articles');
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   // Show loading while authenticating
@@ -399,48 +401,48 @@ const Index = () => {
   }
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden">
-      {/* Debug info when no feeds exist */}
-      {feeds.length === 0 && (
-        <div className="absolute top-4 left-4 z-50 bg-yellow-100 text-yellow-800 p-2 rounded text-sm">
-          No feeds loaded. Add a feed to get started!
-        </div>
+    <div className="h-screen bg-background overflow-hidden">
+      {currentView === 'feeds' && (
+        <MobileFeedSidebar
+          feeds={feeds}
+          selectedFeed={selectedFeed}
+          onFeedSelect={handleFeedSelect}
+          onAddFeed={handleAddFeed}
+          onImportFeeds={handleImportFeeds}
+          onRemoveFeed={handleRemoveFeed}
+          onRenameFeed={handleRenameFeed}
+          onMarkAllAsRead={handleMarkAllAsRead}
+          onReorderFeeds={handleReorderFeeds}
+          isLoading={isLoading}
+        />
       )}
-      {/* Sidebar */}
-      <FeedSidebar
-        feeds={feeds}
-        selectedFeed={selectedFeed}
-        onFeedSelect={(feedId) => dispatch(selectFeed(feedId))}
-        onAddFeed={handleAddFeed}
-        onImportFeeds={handleImportFeeds}
-        onRemoveFeed={handleRemoveFeed}
-        onRenameFeed={handleRenameFeed}
-        onMarkAllAsRead={handleMarkAllAsRead}
-        onReorderFeeds={handleReorderFeeds}
-        isLoading={isLoading}
-      />
 
-      {/* Article List */}
-      <ArticleList
-        articles={filteredArticles}
-        selectedArticle={selectedArticle}
-        onArticleSelect={(articleId) => dispatch(selectArticle(articleId))}
-        onToggleStar={handleToggleStar}
-        onToggleBookmark={handleToggleBookmark}
-        onMarkAsRead={handleMarkAsRead}
-        sortMode={sortMode}
-        onToggleSortMode={handleToggleSortMode}
-      />
+      {currentView === 'articles' && (
+        <MobileArticleList
+          articles={filteredArticles}
+          selectedArticle={selectedArticle}
+          onArticleSelect={handleArticleSelect}
+          onToggleStar={handleToggleStar}
+          onToggleBookmark={handleToggleBookmark}
+          onMarkAsRead={handleMarkAsRead}
+          sortMode={sortMode}
+          onToggleSortMode={handleToggleSortMode}
+          onBack={handleBackToFeeds}
+          selectedFeed={selectedFeed}
+          feeds={feeds}
+        />
+      )}
 
-      {/* Article Reader */}
-      <ArticleReader
-        article={selectedArticleData || null}
-        onToggleStar={handleToggleStar}
-        onToggleBookmark={handleToggleBookmark}
-        onClose={() => dispatch(selectArticle(null))}
-      />
+      {currentView === 'reader' && (
+        <MobileArticleReader
+          article={selectedArticleData || null}
+          onToggleStar={handleToggleStar}
+          onToggleBookmark={handleToggleBookmark}
+          onBack={handleBackToArticles}
+        />
+      )}
     </div>
   );
 };
 
-export default Index;
+export default Mobile;
