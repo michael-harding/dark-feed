@@ -181,8 +181,8 @@ const Mobile = () => {
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         toast({
-          title: "Feeds Refreshed & Verified",
-          description: "Checked for new articles and corrected unread counts",
+          title: "Feeds Refreshed",
+          description: "Checked for new articles",
         });
       } catch (error) {
         console.error('Error refreshing feeds:', error);

@@ -362,26 +362,24 @@ export class DataLayer {
 
   // RSS fetching
   static fetchRSSFeed = async (url: string): Promise<any> => {
-    // On dev server, limit fetching to 10 minute intervals to prevent 429 errors
-    if (typeof window !== 'undefined' && window.location.hostname === 'localhost') {
-      let fetchTimes: Record<string, number> = {};
-      try {
-        fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
-      } catch {}
-      const now = Date.now();
-      const lastFetch = fetchTimes[url] || 0;
-      const tenMinutes = 10 * 60 * 1000;
-      if (now - lastFetch < tenMinutes) {
-        console.warn(`RSS feed for ${url} was fetched less than 10 minutes ago. Skipping fetch on dev server to prevent 429 errors`);
-        return {
-          status: 'skipped',
-          feed: { title: 'Development Feed (skipped)' },
-          items: []
-        };
-      }
-      fetchTimes[url] = now;
-      localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
+    // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
+    let fetchTimes: Record<string, number> = {};
+    try {
+      fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
+    } catch {}
+    const now = Date.now();
+    const lastFetch = fetchTimes[url] || 0;
+    const threeMinutes = 3 * 60 * 1000;
+    if (now - lastFetch < threeMinutes) {
+      console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
+      return {
+        status: 'skipped',
+        feed: { title: 'Development Feed (skipped)' },
+        items: []
+      };
     }
+    fetchTimes[url] = now;
+    localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
 
     try {
       // Use RSS2JSON API which is browser-compatible
