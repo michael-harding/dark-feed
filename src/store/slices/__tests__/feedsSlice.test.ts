@@ -64,6 +64,7 @@ describe('feedsSlice', () => {
     const state = feedsReducer({
       feeds: mockFeeds,
       isLoading: false,
+      error: null,
     }, setFeedUnreadCount({ feedId: 'feed-1', count: 10 }))
     
     expect(state.feeds[0].unreadCount).toBe(10)
@@ -73,6 +74,7 @@ describe('feedsSlice', () => {
     const state = feedsReducer({
       feeds: mockFeeds,
       isLoading: false,
+      error: null,
     }, updateFeedUnreadCount({ feedId: 'feed-1', delta: 2 }))
     
     expect(state.feeds[0].unreadCount).toBe(7) // 5 + 2
@@ -82,6 +84,7 @@ describe('feedsSlice', () => {
     const state = feedsReducer({
       feeds: mockFeeds,
       isLoading: false,
+      error: null,
     }, markAllAsRead('feed-1'))
     
     expect(state.feeds[0].unreadCount).toBe(0)
@@ -119,6 +122,7 @@ describe('feedsSlice', () => {
     const state = feedsReducer({
       feeds: mockFeeds,
       isLoading: false,
+      error: null,
     }, removeFeed('feed-1'))
     
     expect(state.feeds).toHaveLength(1)
@@ -129,6 +133,7 @@ describe('feedsSlice', () => {
     const state = feedsReducer({
       feeds: mockFeeds,
       isLoading: false,
+      error: null,
     }, renameFeed({ id: 'feed-1', newTitle: 'Renamed Feed' }))
     
     expect(state.feeds[0].title).toBe('Renamed Feed')
