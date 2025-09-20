@@ -23,7 +23,7 @@ describe('uiSlice', () => {
   it('should handle initial state', () => {
     const state = uiReducer(undefined, { type: '@@INIT' })
     expect(state).toEqual({
-      selectedFeed: 'all',
+      selectedFeed: null,
       selectedArticle: null,
       sortMode: 'chronological',
       accentColor: '46 87% 65%',
@@ -68,13 +68,13 @@ describe('uiSlice', () => {
       sortMode: 'unreadOnTop' as const,
       accentColor: '200 80% 60%'
     }
-    
-    const state = uiReducer(undefined, { 
-      type: loadUserSettings.fulfilled.type, 
+
+    const state = uiReducer(undefined, {
+      type: loadUserSettings.fulfilled.type,
       payload: mockSettings,
       meta: {} as any
     })
-    
+
     expect(state.sortMode).toBe('unreadOnTop')
     expect(state.accentColor).toBe('200 80% 60%')
   })
