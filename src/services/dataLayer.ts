@@ -26,8 +26,6 @@ export interface Article {
   sortOrder: number;
 }
 
-// Local storage key for feed fetch times (to prevent rate limiting during development)
-const FEED_FETCH_TIMES_KEY = 'rss-feed-fetch-times';
 
 export class DataLayer {
   // Feed operations
@@ -53,7 +51,7 @@ export class DataLayer {
         url: feed.url,
         unreadCount: feed.unread_count,
         category: feed.category,
-        fetchTime: feed.fetch_time
+        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
       }));
     } catch (error) {
       console.error('Error loading feeds:', error);
@@ -114,6 +112,41 @@ export class DataLayer {
       }
     } catch (error) {
       console.error('Error deleting feed:', error);
+    }
+  };
+
+  static getFeedByUrl = async (url: string): Promise<Feed | null> => {
+    try {
+      const { data: user } = await supabase.auth.getUser();
+      if (!user.user) return null;
+
+      const { data, error } = await supabase
+        .from('feeds')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .eq('url', url)
+        .single();
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No feed found with this URL
+          return null;
+        }
+        console.error('Error getting feed by URL:', error);
+        return null;
+      }
+
+      return {
+        id: data.id,
+        title: data.title,
+        url: data.url,
+        unreadCount: data.unread_count,
+        category: data.category,
+        fetchTime: data.fetch_time ? data.fetch_time + 'Z' : data.fetch_time
+      };
+    } catch (error) {
+      console.error('Error getting feed by URL:', error);
+      return null;
     }
   };
 
@@ -366,23 +399,22 @@ export class DataLayer {
   // RSS fetching
   static fetchRSSFeed = async (url: string): Promise<any> => {
     // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
-    let fetchTimes: Record<string, number> = {};
-    try {
-      fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
-    } catch {}
+    const feed = await DataLayer.getFeedByUrl(url);
     const now = Date.now();
-    const lastFetch = fetchTimes[url] || 0;
     const threeMinutes = 3 * 60 * 1000;
-    if (now - lastFetch < threeMinutes) {
-      console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
-      return {
-        status: 'skipped',
-        feed: { title: 'Feed (skipped)' },
-        items: []
-      };
+
+    if (feed && feed.fetchTime) {
+      const lastFetch = new Date(feed.fetchTime).getTime();
+
+      if (now - lastFetch < threeMinutes) {
+        console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
+        return {
+          status: 'skipped',
+          feed: { title: 'Feed (skipped)' },
+          items: []
+        };
+      }
     }
-    fetchTimes[url] = now;
-    localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
 
     try {
       // Use RSS2JSON API which is browser-compatible
@@ -397,6 +429,15 @@ export class DataLayer {
 
       if (data.status !== 'ok') {
         throw new Error(data.message || 'Failed to parse RSS feed');
+      }
+
+      // Update fetch time in database after successful fetch
+      if (feed) {
+        const updatedFeed: Feed = {
+          ...feed,
+          fetchTime: new Date().toISOString()
+        };
+        await DataLayer.saveFeed(updatedFeed);
       }
 
       return data;
