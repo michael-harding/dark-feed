@@ -28,10 +28,36 @@ export interface Article {
 
 
 export class DataLayer {
+  // User cache to reduce preflight requests
+  private static userCache: { user: { data: { user: { id: string } } }; timestamp: number } | null = null;
+  private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  private static getCachedUser = async () => {
+    const now = Date.now();
+
+    // Return cached user if still valid
+    if (DataLayer.userCache && (now - DataLayer.userCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.userCache.user;
+    }
+
+    // Fetch fresh user data and cache it
+    const userData = await supabase.auth.getUser();
+    DataLayer.userCache = {
+      user: userData,
+      timestamp: now
+    };
+
+    return userData;
+  };
+
+  private static clearUserCache = () => {
+    DataLayer.userCache = null;
+  };
+
   // Feed operations
   static loadFeeds = async (): Promise<Feed[]> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return [];
 
       const { data, error } = await supabase
@@ -61,7 +87,7 @@ export class DataLayer {
 
   static saveFeeds = async (feeds: Feed[]): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       // For simplicity, we'll handle this through individual feed operations
@@ -73,7 +99,7 @@ export class DataLayer {
 
   static saveFeed = async (feed: Feed): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -98,7 +124,7 @@ export class DataLayer {
 
   static deleteFeed = async (feedId: string): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -117,7 +143,7 @@ export class DataLayer {
 
   static getFeedByUrl = async (url: string): Promise<Feed | null> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return null;
 
       const { data, error } = await supabase
@@ -153,7 +179,7 @@ export class DataLayer {
   // Article operations
   static loadArticles = async (): Promise<Article[]> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return [];
 
       const { data, error } = await supabase
@@ -190,7 +216,7 @@ export class DataLayer {
 
   static saveArticles = async (articles: Article[]): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const articlesData = articles.map(article => ({
@@ -224,7 +250,7 @@ export class DataLayer {
 
   static updateArticle = async (article: Article): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -248,7 +274,7 @@ export class DataLayer {
 
   static getExistingArticleUrlsForFeed = async (feedId: string): Promise<Set<string>> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return new Set();
 
       const { data, error } = await supabase
@@ -272,7 +298,7 @@ export class DataLayer {
   // Settings operations
   static loadSortMode = async (): Promise<'chronological' | 'unreadOnTop'> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return 'chronological';
 
       const { data, error } = await supabase
@@ -300,7 +326,7 @@ export class DataLayer {
 
   static saveSortMode = async (mode: 'chronological' | 'unreadOnTop'): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -323,7 +349,7 @@ export class DataLayer {
 
   static loadAccentColor = async (): Promise<string> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return '46 87% 65%';
 
       const { data, error } = await supabase
@@ -351,7 +377,7 @@ export class DataLayer {
 
   static saveAccentColor = async (color: string): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -374,7 +400,7 @@ export class DataLayer {
 
   static createDefaultSettings = async (): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -397,7 +423,7 @@ export class DataLayer {
   };
 
   // RSS fetching
-  static fetchRSSFeed = async (url: string): Promise<any> => {
+  static fetchRSSFeed = async (url: string): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
     const feed = await DataLayer.getFeedByUrl(url);
     const now = Date.now();
@@ -450,7 +476,7 @@ export class DataLayer {
 
   // Business logic helpers
   static setSortOrderForArticles = (articles: Article[], mode: 'chronological' | 'unreadOnTop'): Article[] => {
-    let sorted = [...articles];
+    const sorted = [...articles];
     if (mode === 'chronological') {
       sorted.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     } else {
@@ -474,22 +500,25 @@ export class DataLayer {
     }
   };
 
-  static createArticlesFromRSSData = (data: any, feedId: string, feedTitle: string): Article[] => {
-    return data.items?.map((item: any, index: number) => ({
-      id: crypto.randomUUID(),
-      title: item.title || 'Untitled',
-      description: item.description?.replace(/<[^>]*>/g, '') || '',
-      content: item.content || item.description || '',
-      url: item.link || '',
-      publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-      feedId,
-      feedTitle,
-      isRead: false,
-      isStarred: false,
-      isBookmarked: false,
-      author: item.author || '',
-      sortOrder: 0
-    })) || [];
+  static createArticlesFromRSSData = (data: { items?: unknown[] }, feedId: string, feedTitle: string): Article[] => {
+    return data.items?.map((item: unknown, index: number) => {
+      const rssItem = item as { title?: string; description?: string; content?: string; link?: string; pubDate?: string; author?: string };
+      return {
+        id: crypto.randomUUID(),
+        title: rssItem.title || 'Untitled',
+        description: rssItem.description?.replace(/<[^>]*>/g, '') || '',
+        content: rssItem.content || rssItem.description || '',
+        url: rssItem.link || '',
+        publishedAt: rssItem.pubDate ? new Date(rssItem.pubDate).toISOString() : new Date().toISOString(),
+        feedId,
+        feedTitle,
+        isRead: false,
+        isStarred: false,
+        isBookmarked: false,
+        author: rssItem.author || '',
+        sortOrder: 0
+      };
+    }) || [];
   };
 
   static cleanupOldArticles = async (articles: Article[], currentFeedArticleUrls: Set<string>): Promise<Article[]> => {
@@ -513,7 +542,7 @@ export class DataLayer {
     const articlesToDelete = articles.filter(article => !articlesToKeep.includes(article));
     if (articlesToDelete.length > 0) {
       try {
-        const { data: user } = await supabase.auth.getUser();
+        const { data: user } = await DataLayer.getCachedUser();
         if (user.user) {
           const { error } = await supabase
             .from('articles')
