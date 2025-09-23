@@ -417,8 +417,9 @@ export class DataLayer {
     }
 
     try {
-      // Use RSS2JSON API which is browser-compatible
-      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
+      const feedTimeFilter = feed.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
+
       const response = await fetch(apiUrl);
 
       if (!response.ok) {
