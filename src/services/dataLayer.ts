@@ -32,6 +32,13 @@ export class DataLayer {
   private static userCache: { user: { data: { user: { id: string } } }; timestamp: number } | null = null;
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
+  // Profile/settings cache to reduce duplicate profile requests
+  private static profileCache: { sortMode: string; accentColor: string; timestamp: number } | null = null;
+  private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
+
+  // User profile cache for profiles table
+  private static userProfileCache: { profile: { id: string; user_id: string; display_name: string | null; created_at: string; updated_at: string }; timestamp: number } | null = null;
+
   private static getCachedUser = async () => {
     const now = Date.now();
 
@@ -52,6 +59,167 @@ export class DataLayer {
 
   private static clearUserCache = () => {
     DataLayer.userCache = null;
+    DataLayer.clearUserProfileCache();
+  };
+
+  private static ensureProfileLoaded = async () => {
+    const now = Date.now();
+
+    // Return cached profile if still valid
+    if (DataLayer.profileCache && (now - DataLayer.profileCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.profileCache;
+    }
+
+    // If already fetching, wait for that promise
+    if (DataLayer.profilePromise) {
+      return await DataLayer.profilePromise;
+    }
+
+    // Fetch fresh profile data and cache it
+    DataLayer.profilePromise = (async () => {
+      try {
+        const { data: user } = await DataLayer.getCachedUser();
+        if (!user.user) {
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          DataLayer.profileCache = { ...defaultData, timestamp: now };
+          return defaultData;
+        }
+
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('sort_mode, accent_color')
+          .eq('user_id', user.user.id)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // No settings exist, create default settings
+            await DataLayer.createDefaultSettings();
+            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+            DataLayer.profileCache = { ...defaultData, timestamp: now };
+            return defaultData;
+          }
+          console.error('Error loading profile:', error);
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          DataLayer.profileCache = { ...defaultData, timestamp: now };
+          return defaultData;
+        }
+
+        const profileData = {
+          sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
+          accentColor: data?.accent_color || '46 87% 65%'
+        };
+
+        DataLayer.profileCache = { ...profileData, timestamp: now };
+        return profileData;
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+        DataLayer.profileCache = { ...defaultData, timestamp: now };
+        return defaultData;
+      } finally {
+        DataLayer.profilePromise = null;
+      }
+    })();
+
+    return await DataLayer.profilePromise;
+  };
+
+  private static getCachedProfileData = () => {
+    if (!DataLayer.profileCache) {
+      throw new Error('Profile data not loaded yet. Call ensureProfileLoaded() first.');
+    }
+    return DataLayer.profileCache;
+  };
+
+  // Public method to load all profile data at once
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string }> => {
+    await DataLayer.ensureProfileLoaded();
+    const profile = DataLayer.getCachedProfileData();
+    return { sortMode: profile.sortMode as 'chronological' | 'unreadOnTop', accentColor: profile.accentColor };
+  };
+
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string }) => {
+    if (DataLayer.profileCache) {
+      if (updates.sortMode !== undefined) {
+        DataLayer.profileCache.sortMode = updates.sortMode;
+      }
+      if (updates.accentColor !== undefined) {
+        DataLayer.profileCache.accentColor = updates.accentColor;
+      }
+      DataLayer.profileCache.timestamp = Date.now();
+    }
+  };
+
+  private static clearProfileCache = () => {
+    DataLayer.profileCache = null;
+    DataLayer.profilePromise = null;
+  };
+
+  private static clearUserProfileCache = () => {
+    DataLayer.userProfileCache = null;
+  };
+
+  // User profile operations
+  static loadUserProfile = async (userId: string) => {
+    const now = Date.now();
+
+    // Return cached profile if still valid
+    if (DataLayer.userProfileCache && (now - DataLayer.userProfileCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.userProfileCache.profile;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+
+      if (error) {
+        console.error('Error loading user profile:', error);
+        return null;
+      }
+
+      DataLayer.userProfileCache = {
+        profile: data,
+        timestamp: now
+      };
+
+      return data;
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return null;
+    }
+  };
+
+  static createUserProfile = async (userId: string, displayName?: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: userId,
+          display_name: displayName || null,
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating user profile:', error);
+        return null;
+      }
+
+      // Cache the newly created profile
+      DataLayer.userProfileCache = {
+        profile: data,
+        timestamp: Date.now()
+      };
+
+      return data;
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      return null;
+    }
   };
 
   // Feed operations
@@ -298,26 +466,9 @@ export class DataLayer {
   // Settings operations
   static loadSortMode = async (): Promise<'chronological' | 'unreadOnTop'> => {
     try {
-      const { data: user } = await DataLayer.getCachedUser();
-      if (!user.user) return 'chronological';
-
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('sort_mode')
-        .eq('user_id', user.user.id)
-        .single();
-
-      if (error) {
-        // If no settings exist, create default settings
-        if (error.code === 'PGRST116') {
-          await DataLayer.createDefaultSettings();
-          return 'chronological';
-        }
-        console.error('Error loading sort mode:', error);
-        return 'chronological';
-      }
-
-      return data.sort_mode as 'chronological' | 'unreadOnTop';
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.sortMode as 'chronological' | 'unreadOnTop';
     } catch (error) {
       console.error('Error loading sort mode:', error);
       return 'chronological';
@@ -341,6 +492,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error saving sort mode:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ sortMode: mode });
       }
     } catch (error) {
       console.error('Error saving sort mode:', error);
@@ -349,26 +503,9 @@ export class DataLayer {
 
   static loadAccentColor = async (): Promise<string> => {
     try {
-      const { data: user } = await DataLayer.getCachedUser();
-      if (!user.user) return '46 87% 65%';
-
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('accent_color')
-        .eq('user_id', user.user.id)
-        .single();
-
-      if (error) {
-        // If no settings exist, create default settings
-        if (error.code === 'PGRST116') {
-          await DataLayer.createDefaultSettings();
-          return '46 87% 65%';
-        }
-        console.error('Error loading accent color:', error);
-        return '46 87% 65%';
-      }
-
-      return data.accent_color;
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.accentColor;
     } catch (error) {
       console.error('Error loading accent color:', error);
       return '46 87% 65%';
@@ -392,6 +529,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error saving accent color:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ accentColor: color });
       }
     } catch (error) {
       console.error('Error saving accent color:', error);
@@ -416,6 +556,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error creating default settings:', error);
+      } else {
+        // Update cache with default values
+        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%' });
       }
     } catch (error) {
       console.error('Error creating default settings:', error);

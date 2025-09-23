@@ -1,9 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Tables } from '@/integrations/supabase/types';
+import { DataLayer } from '@/services/dataLayer';
 
-type Profile = Tables<'profiles'>;
+interface Profile {
+  id: string;
+  user_id: string;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -43,25 +49,9 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to fetch user profile
+  // Function to fetch user profile using DataLayer
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      return null;
-    }
+    return await DataLayer.loadUserProfile(userId);
   };
 
   useEffect(() => {
@@ -109,7 +99,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -123,16 +113,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Create profile if signup was successful
     if (!error && data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: data.user.id,
-          display_name: displayName || null,
-        });
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-      }
+      await DataLayer.createUserProfile(data.user.id, displayName || undefined);
     }
 
     return { error };
@@ -151,14 +132,14 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
+    <AuthContext.Provider value={{
+      user,
+      session,
       profile,
-      signUp, 
-      signIn, 
-      signOut, 
-      loading 
+      signUp,
+      signIn,
+      signOut,
+      loading
     }}>
       {children}
     </AuthContext.Provider>

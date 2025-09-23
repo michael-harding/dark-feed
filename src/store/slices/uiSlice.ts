@@ -21,9 +21,7 @@ const initialState: UIState = {
 export const loadUserSettings = createAsyncThunk(
   'ui/loadUserSettings',
   async () => {
-    const sortMode = await DataLayer.loadSortMode();
-    const accentColor = await DataLayer.loadAccentColor();
-    return { sortMode, accentColor };
+    return await DataLayer.loadAllProfileData();
   }
 );
 
