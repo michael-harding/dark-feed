@@ -38,7 +38,8 @@ export const addFeed = createAsyncThunk(
         title: data.feed?.title || 'Unknown Feed',
         url: url,
         unreadCount: data.items?.length || 0,
-        category: undefined
+        category: undefined,
+        fetchTime: new Date().toISOString()
       };
 
       await DataLayer.saveFeed(newFeed);
@@ -81,7 +82,8 @@ export const importFeeds = createAsyncThunk(
             title: data.feed?.title || feed.title || 'Unknown Feed',
             url: feed.url,
             unreadCount: data.items?.length || 0,
-            category: feed.category
+            category: feed.category,
+            fetchTime: new Date().toISOString()
           };
 
           await DataLayer.saveFeed(newFeed);
@@ -130,6 +132,13 @@ export const refreshFeed = createAsyncThunk(
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, feed.title)
         .filter(article => !existingUrls.has(article.url));
 
+      // Update the feed's fetch time
+      const updatedFeed: Feed = {
+        ...feed,
+        fetchTime: new Date().toISOString()
+      };
+      await DataLayer.saveFeed(updatedFeed);
+
       return { feedId, articles: newArticles };
     } catch (error) {
       throw new Error(`Failed to refresh feed: ${error instanceof Error ? error.message : 'Unknown error'}`);
@@ -156,7 +165,14 @@ export const refreshAllFeeds = createAsyncThunk(
         const feedArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title)
           .filter(article => !existingUrls.has(article.url));
 
-        results.push({ newArticles: feedArticles, feed });
+        // Update the feed's fetch time
+        const updatedFeed: Feed = {
+          ...feed,
+          fetchTime: new Date().toISOString()
+        };
+        await DataLayer.saveFeed(updatedFeed);
+
+        results.push({ newArticles: feedArticles, feed: updatedFeed });
       } catch (error) {
         console.error(`Failed to refresh feed ${feed.title}:`, error);
         results.push({

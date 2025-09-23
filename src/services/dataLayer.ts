@@ -7,6 +7,7 @@ export interface Feed {
   url: string;
   unreadCount: number;
   category?: string;
+  fetchTime?: string;
 }
 
 export interface Article {
@@ -51,7 +52,8 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category
+        category: feed.category,
+        fetchTime: feed.fetch_time
       }));
     } catch (error) {
       console.error('Error loading feeds:', error);
@@ -84,7 +86,8 @@ export class DataLayer {
           title: feed.title,
           url: feed.url,
           unread_count: feed.unreadCount,
-          category: feed.category
+          category: feed.category,
+          fetch_time: feed.fetchTime
         });
 
       if (error) {
@@ -374,7 +377,7 @@ export class DataLayer {
       console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
       return {
         status: 'skipped',
-        feed: { title: 'Development Feed (skipped)' },
+        feed: { title: 'Feed (skipped)' },
         items: []
       };
     }
