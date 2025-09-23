@@ -130,7 +130,10 @@ const articlesSlice = createSlice({
       // This will be handled async in the background - create a plain copy
       const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
       DataLayer.cleanupOldArticles(plainArticles, currentFeedArticleUrls).then(cleanedArticles => {
-        // The next load will have cleaned data
+        // Update state immediately with cleaned articles
+        state.articles = cleanedArticles;
+        // Note: filteredArticles will be updated by the updateFilteredArticles action
+        // which should be dispatched after this cleanup completes
       });
     },
   },
@@ -181,8 +184,9 @@ const articlesSlice = createSlice({
           // Cleanup old articles for this feed async - create a plain copy
           const currentFeedArticleUrls = new Set(action.payload.articles.map((a: Article) => a.url));
           const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.cleanupOldArticles(plainArticles, currentFeedArticleUrls).then(() => {
-            // Update state will happen on next load
+          DataLayer.cleanupOldArticles(plainArticles, currentFeedArticleUrls).then(cleanedArticles => {
+            // Update state immediately with cleaned articles
+            state.articles = cleanedArticles;
           });
 
           // Save to database async - create a plain copy
@@ -212,10 +216,17 @@ const articlesSlice = createSlice({
       .addCase(refreshAllFeeds.fulfilled, (state, action) => {
         // action.payload is now an array of results per feed
         const allNewArticles: Article[] = [];
+        const allCurrentFeedUrls = new Set<string>();
 
         action.payload.forEach(result => {
           if (result.newArticles && result.newArticles.length > 0) {
             allNewArticles.push(...result.newArticles);
+            // Collect URLs from freshly fetched RSS data
+            result.newArticles.forEach(article => {
+              if (article.url) {
+                allCurrentFeedUrls.add(article.url);
+              }
+            });
           }
         });
 
@@ -226,10 +237,11 @@ const articlesSlice = createSlice({
           state.articles.push(...filteredNewArticles);
 
           // Cleanup old articles async - create a plain copy
-          const allCurrentUrls = new Set(state.articles.map(a => a.url));
+          // Use URLs from freshly fetched RSS data, not existing state
           const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.cleanupOldArticles(plainArticles, allCurrentUrls).then(() => {
-            // Update state will happen on next load
+          DataLayer.cleanupOldArticles(plainArticles, allCurrentFeedUrls).then(cleanedArticles => {
+            // Update state immediately with cleaned articles
+            state.articles = cleanedArticles;
           });
 
           // Save to database async - create a plain copy
