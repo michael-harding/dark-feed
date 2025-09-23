@@ -28,7 +28,7 @@ import {
   updateArticlesFeedTitle,
   markAllAsReadForFeed,
   updateFilteredArticles,
-  cleanupOldArticles,
+  cleanupOldArticlesAsync,
 } from '@/store/slices/articlesSlice';
 import {
   selectFeed,
@@ -185,7 +185,7 @@ const Index = () => {
         });
 
         // Step 5: Clean up old articles using full current URLs
-        dispatch(cleanupOldArticles(updatedFeedArticleUrls));
+        dispatch(cleanupOldArticlesAsync(updatedFeedArticleUrls));
         // Update filtered articles after cleanup
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 

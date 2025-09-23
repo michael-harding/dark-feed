@@ -28,7 +28,7 @@ import {
   updateArticlesFeedTitle,
   markAllAsReadForFeed,
   updateFilteredArticles,
-  cleanupOldArticles,
+  cleanupOldArticlesAsync,
 } from '@/store/slices/articlesSlice';
 import {
   selectFeed,
@@ -177,7 +177,7 @@ const Mobile = () => {
           }
         });
 
-        dispatch(cleanupOldArticles(updatedFeedArticleUrls));
+        dispatch(cleanupOldArticlesAsync(updatedFeedArticleUrls));
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         toast({

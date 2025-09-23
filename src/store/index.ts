@@ -13,7 +13,7 @@ export const store = configureStore({
     getDefaultMiddleware({
       serializableCheck: {
         // Ignore these action types
-        ignoredActions: ['articles/cleanupOldArticles'],
+        ignoredActions: ['articles/cleanupOldArticlesAsync'],
         // Ignore these field paths in all actions
         ignoredActionsPaths: ['payload.currentFeedArticleUrls'],
         // Ignore these paths in the state
