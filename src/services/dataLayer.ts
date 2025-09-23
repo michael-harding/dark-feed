@@ -174,19 +174,25 @@ export class DataLayer {
         .from('profiles')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .limit(1);
 
       if (error) {
         console.error('Error loading user profile:', error);
         return null;
       }
 
+      if (!data || data.length === 0) {
+        // No profile found for this user
+        return null;
+      }
+
+      const profile = data[0];
       DataLayer.userProfileCache = {
-        profile: data,
+        profile: profile,
         timestamp: now
       };
 
-      return data;
+      return profile;
     } catch (error) {
       console.error('Error loading user profile:', error);
       return null;
@@ -202,20 +208,26 @@ export class DataLayer {
           display_name: displayName || null,
         })
         .select()
-        .single();
+        .limit(1);
 
       if (error) {
         console.error('Error creating user profile:', error);
         return null;
       }
 
+      if (!data || data.length === 0) {
+        console.error('No profile returned after creation');
+        return null;
+      }
+
+      const profile = data[0];
       // Cache the newly created profile
       DataLayer.userProfileCache = {
-        profile: data,
+        profile: profile,
         timestamp: Date.now()
       };
 
-      return data;
+      return profile;
     } catch (error) {
       console.error('Error creating user profile:', error);
       return null;
@@ -319,24 +331,26 @@ export class DataLayer {
         .select('*')
         .eq('user_id', user.user.id)
         .eq('url', url)
-        .single();
+        .limit(1);
 
       if (error) {
-        if (error.code === 'PGRST116') {
-          // No feed found with this URL
-          return null;
-        }
         console.error('Error getting feed by URL:', error);
         return null;
       }
 
+      if (!data || data.length === 0) {
+        // No feed found with this URL
+        return null;
+      }
+
+      const feed = data[0];
       return {
-        id: data.id,
-        title: data.title,
-        url: data.url,
-        unreadCount: data.unread_count,
-        category: data.category,
-        fetchTime: data.fetch_time ? data.fetch_time + 'Z' : data.fetch_time
+        id: feed.id,
+        title: feed.title,
+        url: feed.url,
+        unreadCount: feed.unread_count,
+        category: feed.category,
+        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
       };
     } catch (error) {
       console.error('Error getting feed by URL:', error);
@@ -586,7 +600,7 @@ export class DataLayer {
     }
 
     try {
-      const feedTimeFilter = feed.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
