@@ -28,7 +28,6 @@ import {
   updateArticlesFeedTitle,
   markAllAsReadForFeed,
   updateFilteredArticles,
-  cleanupOldArticlesAsync,
 } from '@/store/slices/articlesSlice';
 import {
   selectFeed,
@@ -177,7 +176,7 @@ const Mobile = () => {
           }
         });
 
-        dispatch(cleanupOldArticlesAsync(updatedFeedArticleUrls));
+        // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         toast({

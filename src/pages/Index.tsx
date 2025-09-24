@@ -28,7 +28,6 @@ import {
   updateArticlesFeedTitle,
   markAllAsReadForFeed,
   updateFilteredArticles,
-  cleanupOldArticlesAsync,
 } from '@/store/slices/articlesSlice';
 import {
   selectFeed,
@@ -184,9 +183,7 @@ const Index = () => {
           }
         });
 
-        // Step 5: Clean up old articles using full current URLs
-        dispatch(cleanupOldArticlesAsync(updatedFeedArticleUrls));
-        // Update filtered articles after cleanup
+        // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
         dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
         // Step 6: Final verification of all unread counts after cleanup using fresh articles

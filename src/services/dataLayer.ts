@@ -687,45 +687,40 @@ export class DataLayer {
     }) || [];
   };
 
-  static cleanupOldArticles = async (articles: Article[], currentFeedArticleUrls: Set<string>): Promise<Article[]> => {
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const articlesToKeep = articles.filter(article => {
-      // Keep article if:
-      // 1. It's not read, OR
-      // 2. It's newer than 48 hours, OR
-      // 3. It's still present in the current feed data, OR
-      // 4. It's starred or bookmarked
-      return (
-        !article.isRead ||
-        new Date(article.publishedAt) > fortyEightHoursAgo ||
-        currentFeedArticleUrls.has(article.url) ||
-        article.isStarred ||
-        article.isBookmarked
+
+  // New cleanup method that deletes articles older than the earliest article date for a specific feed
+  static cleanupArticlesByEarliestDate = async (feedId: string, newArticles: Article[]): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      // Get the earliest (oldest) article date from the newly fetched articles
+      if (newArticles.length === 0) return;
+
+      const earliestDate = new Date(
+        Math.min(...newArticles.map(article => new Date(article.publishedAt).getTime()))
       );
-    });
 
-    // Delete articles that should be removed from the database
-    const articlesToDelete = articles.filter(article => !articlesToKeep.includes(article));
-    if (articlesToDelete.length > 0) {
-      try {
-        const { data: user } = await DataLayer.getCachedUser();
-        if (user.user) {
-          const { error } = await supabase
-            .from('articles')
-            .delete()
-            .eq('user_id', user.user.id)
-            .in('id', articlesToDelete.map(a => a.id));
+      // Delete all articles for this feed that are older than the earliest article date
+      // BUT preserve articles that are unread, starred, or bookmarked
+      const { error } = await supabase
+        .from('articles')
+        .delete()
+        .eq('user_id', user.user.id)
+        .eq('feed_id', feedId)
+        .lt('published_at', earliestDate.toISOString())
+        .eq('is_read', true)  // Only delete articles that have been read
+        .eq('is_starred', false)  // Don't delete starred articles
+        .eq('is_bookmarked', false);  // Don't delete bookmarked articles
 
-          if (error) {
-            console.error('Error deleting old articles:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error deleting old articles:', error);
+      if (error) {
+        console.error('Error deleting articles older than earliest date:', error);
+      } else {
+        console.log(`Cleaned up read articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
       }
+    } catch (error) {
+      console.error('Error in cleanupArticlesByEarliestDate:', error);
     }
-
-    return articlesToKeep;
   };
 
   // Helper method to extract a title from URL when RSS feed doesn't have one
