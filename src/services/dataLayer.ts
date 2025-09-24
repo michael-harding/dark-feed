@@ -601,6 +601,7 @@ export class DataLayer {
 
     try {
       const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      console.log(feed.title, feed.fetchTime, feedTimeFilter);
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
@@ -715,8 +716,6 @@ export class DataLayer {
 
       if (error) {
         console.error('Error deleting articles older than earliest date:', error);
-      } else {
-        // console.log(`Cleaned up read articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
       }
     } catch (error) {
       console.error('Error in cleanupArticlesByEarliestDate:', error);

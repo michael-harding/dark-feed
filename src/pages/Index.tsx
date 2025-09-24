@@ -136,7 +136,6 @@ const Index = () => {
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
-            console.log(`Correcting unread count for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
             dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
           }
         });
@@ -193,7 +192,6 @@ const Index = () => {
           const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
           if (actualUnreadCount !== feed.unreadCount) {
-            console.log(`Final correction for ${feed.title}: ${feed.unreadCount} -> ${actualUnreadCount}`);
             dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
           }
         });
