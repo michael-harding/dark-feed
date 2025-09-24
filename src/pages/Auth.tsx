@@ -40,7 +40,7 @@ export default function Auth() {
     } else {
       setError('Check your email for confirmation link!');
     }
-    
+
     setLoading(false);
   };
 
@@ -57,9 +57,16 @@ export default function Auth() {
     const { error } = await signIn(email, password);
 
     if (error) {
-      setError(error.message);
+      // Provide user-friendly error messages
+      if (error.message?.includes('token is expired')) {
+        setError('Your session has expired. Please sign in again.');
+      } else if (error.message?.includes('Invalid login credentials')) {
+        setError('Invalid email or password. Please check your credentials and try again.');
+      } else {
+        setError(error.message);
+      }
     }
-    
+
     setLoading(false);
   };
 
@@ -83,7 +90,7 @@ export default function Auth() {
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
             </TabsList>
-            
+
             <TabsContent value="signin">
               <form onSubmit={handleSignIn} className="space-y-4">
                 <div className="space-y-2">
@@ -108,19 +115,19 @@ export default function Auth() {
                     required
                   />
                 </div>
-                
+
                 {error && (
                   <Alert variant={error.includes('Check your email') ? 'default' : 'destructive'}>
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Signing In...' : 'Sign In'}
                 </Button>
               </form>
             </TabsContent>
-            
+
             <TabsContent value="signup">
               <form onSubmit={handleSignUp} className="space-y-4">
                 <div className="space-y-2">
@@ -155,13 +162,13 @@ export default function Auth() {
                     required
                   />
                 </div>
-                
+
                 {error && (
                   <Alert variant={error.includes('Check your email') ? 'default' : 'destructive'}>
                     <AlertDescription>{error}</AlertDescription>
                   </Alert>
                 )}
-                
+
                 <Button type="submit" className="w-full" disabled={loading}>
                   {loading ? 'Creating Account...' : 'Sign Up'}
                 </Button>
