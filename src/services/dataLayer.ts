@@ -716,7 +716,7 @@ export class DataLayer {
       if (error) {
         console.error('Error deleting articles older than earliest date:', error);
       } else {
-        console.log(`Cleaned up read articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
+        // console.log(`Cleaned up read articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
       }
     } catch (error) {
       console.error('Error in cleanupArticlesByEarliestDate:', error);
