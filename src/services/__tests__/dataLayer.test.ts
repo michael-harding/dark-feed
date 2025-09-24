@@ -43,7 +43,21 @@ describe('DataLayer', () => {
 
   describe('RSS Feed Operations', () => {
     it('should fetch RSS feed data', async () => {
-      const mockFeedData = {
+      const mockApiResponse = {
+        status: 'ok',
+        title: 'Test Feed',
+        items: [
+          {
+            title: 'Test Article',
+            description: 'Test description',
+            link: 'https://example.com/article',
+            pubDate: '2024-01-01T00:00:00Z',
+            author: 'Test Author'
+          }
+        ]
+      }
+
+      const expectedResult = {
         status: 'ok',
         feed: { title: 'Test Feed' },
         items: [
@@ -59,11 +73,11 @@ describe('DataLayer', () => {
 
       global.fetch = vi.fn().mockResolvedValue({
         ok: true,
-        json: () => Promise.resolve(mockFeedData)
+        json: () => Promise.resolve(mockApiResponse)
       })
 
       const result = await DataLayer.fetchRSSFeed('https://example.com/feed.xml')
-      expect(result).toEqual(mockFeedData)
+      expect(result).toEqual(expectedResult)
     })
 
     it('should handle RSS feed fetch error', async () => {
@@ -159,12 +173,20 @@ describe('DataLayer', () => {
       }
 
       const articles = DataLayer.createArticlesFromRSSData(mockRSSData, 'feed-1', 'Test Feed')
-      
+
       expect(articles).toHaveLength(1)
       expect(articles[0].title).toBe('RSS Article')
       expect(articles[0].feedId).toBe('feed-1')
       expect(articles[0].feedTitle).toBe('Test Feed')
       expect(articles[0].isRead).toBe(false)
+    })
+
+    it('should extract title from URL', () => {
+      expect(DataLayer.extractTitleFromUrl('https://techcrunch.com/feed/')).toBe('Techcrunch')
+      expect(DataLayer.extractTitleFromUrl('https://example.com/feed.xml')).toBe('Example')
+      expect(DataLayer.extractTitleFromUrl('https://news.google.com/rss')).toBe('News')
+      expect(DataLayer.extractTitleFromUrl('https://www.nytimes.com/feed/')).toBe('Nytimes')
+      expect(DataLayer.extractTitleFromUrl('invalid-url')).toBeNull()
     })
   })
 
@@ -190,7 +212,7 @@ describe('DataLayer', () => {
 
       const currentUrls = new Set(['https://example.com/article1'])
       const result = await DataLayer.cleanupOldArticles(articles, currentUrls)
-      
+
       expect(result).toHaveLength(1) // Should keep unread article
     })
 
@@ -215,7 +237,7 @@ describe('DataLayer', () => {
 
       const currentUrls = new Set<string>() // Not in current feed
       const result = await DataLayer.cleanupOldArticles(articles, currentUrls)
-      
+
       expect(result).toHaveLength(1) // Should keep starred article
     })
   })

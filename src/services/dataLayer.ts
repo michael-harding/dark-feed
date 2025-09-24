@@ -615,6 +615,15 @@ export class DataLayer {
         throw new Error(data.message || 'Failed to parse RSS feed');
       }
 
+      // Transform the API response to match the expected format
+      // The API returns { title, description, items } but we need { feed: { title }, items }
+      const feedTitle = data.title || DataLayer.extractTitleFromUrl(url) || 'Unknown Feed';
+      const transformedData = {
+        status: data.status,
+        feed: { title: feedTitle },
+        items: data.items || []
+      };
+
       // Update fetch time in database after successful fetch
       if (feed) {
         const updatedFeed: Feed = {
@@ -624,7 +633,7 @@ export class DataLayer {
         await DataLayer.saveFeed(updatedFeed);
       }
 
-      return data;
+      return transformedData;
     } catch (error) {
       console.error('Error fetching RSS feed:', error);
       throw error;
@@ -717,5 +726,37 @@ export class DataLayer {
     }
 
     return articlesToKeep;
+  };
+
+  // Helper method to extract a title from URL when RSS feed doesn't have one
+  static extractTitleFromUrl = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+
+      // Remove www. prefix if present
+      const domain = hostname.replace(/^www\./, '');
+
+      // Split by dots and take the main domain name
+      const parts = domain.split('.');
+      if (parts.length >= 2) {
+        // For domains like techcrunch.com, take the first part
+        // For domains like news.google.com, take the second part (google)
+        if (parts.length === 2) {
+          return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        } else if (parts.length === 3 && parts[1].length <= 3) {
+          // Handle cases like news.google.com -> Google
+          return parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+        } else {
+          // For longer domains, take the first meaningful part
+          return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        }
+      }
+
+      return domain.charAt(0).toUpperCase() + domain.slice(1);
+    } catch (error) {
+      console.error('Error extracting title from URL:', error);
+      return null;
+    }
   };
 }
