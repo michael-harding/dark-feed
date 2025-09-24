@@ -163,10 +163,7 @@ export const refreshAllFeeds = createAsyncThunk(
           results.push({ newArticles: [], feed });
           continue;
         }
-
-        const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feed.id);
         const feedArticles = DataLayer.createArticlesFromRSSData(data, feed.id, feed.title)
-          .filter(article => !existingUrls.has(article.url));
 
         // Clean up old articles for this feed based on the earliest article date
         await DataLayer.cleanupArticlesByEarliestDate(feed.id, feedArticles);
