@@ -7,6 +7,7 @@ export interface Feed {
   url: string;
   unreadCount: number;
   category?: string;
+  fetchTime?: string;
 }
 
 export interface Article {
@@ -25,14 +26,218 @@ export interface Article {
   sortOrder: number;
 }
 
-// Local storage key for feed fetch times (to prevent rate limiting during development)
-const FEED_FETCH_TIMES_KEY = 'rss-feed-fetch-times';
 
 export class DataLayer {
+  // User cache to reduce preflight requests
+  private static userCache: { user: { data: { user: { id: string } } }; timestamp: number } | null = null;
+  private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
+
+  // Profile/settings cache to reduce duplicate profile requests
+  private static profileCache: { sortMode: string; accentColor: string; timestamp: number } | null = null;
+  private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
+
+  // User profile cache for profiles table
+  private static userProfileCache: { profile: { id: string; user_id: string; display_name: string | null; created_at: string; updated_at: string }; timestamp: number } | null = null;
+
+  private static getCachedUser = async () => {
+    const now = Date.now();
+
+    // Return cached user if still valid
+    if (DataLayer.userCache && (now - DataLayer.userCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.userCache.user;
+    }
+
+    // Fetch fresh user data and cache it
+    const userData = await supabase.auth.getUser();
+    DataLayer.userCache = {
+      user: userData,
+      timestamp: now
+    };
+
+    return userData;
+  };
+
+  private static clearUserCache = () => {
+    DataLayer.userCache = null;
+    DataLayer.clearUserProfileCache();
+  };
+
+  private static ensureProfileLoaded = async () => {
+    const now = Date.now();
+
+    // Return cached profile if still valid
+    if (DataLayer.profileCache && (now - DataLayer.profileCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.profileCache;
+    }
+
+    // If already fetching, wait for that promise
+    if (DataLayer.profilePromise) {
+      return await DataLayer.profilePromise;
+    }
+
+    // Fetch fresh profile data and cache it
+    DataLayer.profilePromise = (async () => {
+      try {
+        const { data: user } = await DataLayer.getCachedUser();
+        if (!user.user) {
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          DataLayer.profileCache = { ...defaultData, timestamp: now };
+          return defaultData;
+        }
+
+        const { data, error } = await supabase
+          .from('user_settings')
+          .select('sort_mode, accent_color')
+          .eq('user_id', user.user.id)
+          .single();
+
+        if (error) {
+          if (error.code === 'PGRST116') {
+            // No settings exist, create default settings
+            await DataLayer.createDefaultSettings();
+            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+            DataLayer.profileCache = { ...defaultData, timestamp: now };
+            return defaultData;
+          }
+          console.error('Error loading profile:', error);
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          DataLayer.profileCache = { ...defaultData, timestamp: now };
+          return defaultData;
+        }
+
+        const profileData = {
+          sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
+          accentColor: data?.accent_color || '46 87% 65%'
+        };
+
+        DataLayer.profileCache = { ...profileData, timestamp: now };
+        return profileData;
+      } catch (error) {
+        console.error('Error loading profile:', error);
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+        DataLayer.profileCache = { ...defaultData, timestamp: now };
+        return defaultData;
+      } finally {
+        DataLayer.profilePromise = null;
+      }
+    })();
+
+    return await DataLayer.profilePromise;
+  };
+
+  private static getCachedProfileData = () => {
+    if (!DataLayer.profileCache) {
+      throw new Error('Profile data not loaded yet. Call ensureProfileLoaded() first.');
+    }
+    return DataLayer.profileCache;
+  };
+
+  // Public method to load all profile data at once
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string }> => {
+    await DataLayer.ensureProfileLoaded();
+    const profile = DataLayer.getCachedProfileData();
+    return { sortMode: profile.sortMode as 'chronological' | 'unreadOnTop', accentColor: profile.accentColor };
+  };
+
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string }) => {
+    if (DataLayer.profileCache) {
+      if (updates.sortMode !== undefined) {
+        DataLayer.profileCache.sortMode = updates.sortMode;
+      }
+      if (updates.accentColor !== undefined) {
+        DataLayer.profileCache.accentColor = updates.accentColor;
+      }
+      DataLayer.profileCache.timestamp = Date.now();
+    }
+  };
+
+  private static clearProfileCache = () => {
+    DataLayer.profileCache = null;
+    DataLayer.profilePromise = null;
+  };
+
+  private static clearUserProfileCache = () => {
+    DataLayer.userProfileCache = null;
+  };
+
+  // User profile operations
+  static loadUserProfile = async (userId: string) => {
+    const now = Date.now();
+
+    // Return cached profile if still valid
+    if (DataLayer.userProfileCache && (now - DataLayer.userProfileCache.timestamp) < DataLayer.CACHE_TTL) {
+      return DataLayer.userProfileCache.profile;
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .limit(1);
+
+      if (error) {
+        console.error('Error loading user profile:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        // No profile found for this user
+        return null;
+      }
+
+      const profile = data[0];
+      DataLayer.userProfileCache = {
+        profile: profile,
+        timestamp: now
+      };
+
+      return profile;
+    } catch (error) {
+      console.error('Error loading user profile:', error);
+      return null;
+    }
+  };
+
+  static createUserProfile = async (userId: string, displayName?: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: userId,
+          display_name: displayName || null,
+        })
+        .select()
+        .limit(1);
+
+      if (error) {
+        console.error('Error creating user profile:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        console.error('No profile returned after creation');
+        return null;
+      }
+
+      const profile = data[0];
+      // Cache the newly created profile
+      DataLayer.userProfileCache = {
+        profile: profile,
+        timestamp: Date.now()
+      };
+
+      return profile;
+    } catch (error) {
+      console.error('Error creating user profile:', error);
+      return null;
+    }
+  };
+
   // Feed operations
   static loadFeeds = async (): Promise<Feed[]> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return [];
 
       const { data, error } = await supabase
@@ -51,7 +256,8 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category
+        category: feed.category,
+        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
       }));
     } catch (error) {
       console.error('Error loading feeds:', error);
@@ -61,7 +267,7 @@ export class DataLayer {
 
   static saveFeeds = async (feeds: Feed[]): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       // For simplicity, we'll handle this through individual feed operations
@@ -73,7 +279,7 @@ export class DataLayer {
 
   static saveFeed = async (feed: Feed): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -84,7 +290,8 @@ export class DataLayer {
           title: feed.title,
           url: feed.url,
           unread_count: feed.unreadCount,
-          category: feed.category
+          category: feed.category,
+          fetch_time: feed.fetchTime
         });
 
       if (error) {
@@ -97,7 +304,7 @@ export class DataLayer {
 
   static deleteFeed = async (feedId: string): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -114,10 +321,47 @@ export class DataLayer {
     }
   };
 
+  static getFeedByUrl = async (url: string): Promise<Feed | null> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return null;
+
+      const { data, error } = await supabase
+        .from('feeds')
+        .select('*')
+        .eq('user_id', user.user.id)
+        .eq('url', url)
+        .limit(1);
+
+      if (error) {
+        console.error('Error getting feed by URL:', error);
+        return null;
+      }
+
+      if (!data || data.length === 0) {
+        // No feed found with this URL
+        return null;
+      }
+
+      const feed = data[0];
+      return {
+        id: feed.id,
+        title: feed.title,
+        url: feed.url,
+        unreadCount: feed.unread_count,
+        category: feed.category,
+        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
+      };
+    } catch (error) {
+      console.error('Error getting feed by URL:', error);
+      return null;
+    }
+  };
+
   // Article operations
   static loadArticles = async (): Promise<Article[]> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return [];
 
       const { data, error } = await supabase
@@ -154,7 +398,7 @@ export class DataLayer {
 
   static saveArticles = async (articles: Article[]): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const articlesData = articles.map(article => ({
@@ -188,7 +432,7 @@ export class DataLayer {
 
   static updateArticle = async (article: Article): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -212,7 +456,7 @@ export class DataLayer {
 
   static getExistingArticleUrlsForFeed = async (feedId: string): Promise<Set<string>> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return new Set();
 
       const { data, error } = await supabase
@@ -236,26 +480,9 @@ export class DataLayer {
   // Settings operations
   static loadSortMode = async (): Promise<'chronological' | 'unreadOnTop'> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) return 'chronological';
-
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('sort_mode')
-        .eq('user_id', user.user.id)
-        .single();
-
-      if (error) {
-        // If no settings exist, create default settings
-        if (error.code === 'PGRST116') {
-          await DataLayer.createDefaultSettings();
-          return 'chronological';
-        }
-        console.error('Error loading sort mode:', error);
-        return 'chronological';
-      }
-
-      return data.sort_mode as 'chronological' | 'unreadOnTop';
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.sortMode as 'chronological' | 'unreadOnTop';
     } catch (error) {
       console.error('Error loading sort mode:', error);
       return 'chronological';
@@ -264,7 +491,7 @@ export class DataLayer {
 
   static saveSortMode = async (mode: 'chronological' | 'unreadOnTop'): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -279,6 +506,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error saving sort mode:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ sortMode: mode });
       }
     } catch (error) {
       console.error('Error saving sort mode:', error);
@@ -287,26 +517,9 @@ export class DataLayer {
 
   static loadAccentColor = async (): Promise<string> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
-      if (!user.user) return '46 87% 65%';
-
-      const { data, error } = await supabase
-        .from('user_settings')
-        .select('accent_color')
-        .eq('user_id', user.user.id)
-        .single();
-
-      if (error) {
-        // If no settings exist, create default settings
-        if (error.code === 'PGRST116') {
-          await DataLayer.createDefaultSettings();
-          return '46 87% 65%';
-        }
-        console.error('Error loading accent color:', error);
-        return '46 87% 65%';
-      }
-
-      return data.accent_color;
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.accentColor;
     } catch (error) {
       console.error('Error loading accent color:', error);
       return '46 87% 65%';
@@ -315,7 +528,7 @@ export class DataLayer {
 
   static saveAccentColor = async (color: string): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -330,6 +543,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error saving accent color:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ accentColor: color });
       }
     } catch (error) {
       console.error('Error saving accent color:', error);
@@ -338,7 +554,7 @@ export class DataLayer {
 
   static createDefaultSettings = async (): Promise<void> => {
     try {
-      const { data: user } = await supabase.auth.getUser();
+      const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
       const { error } = await supabase
@@ -354,6 +570,9 @@ export class DataLayer {
 
       if (error) {
         console.error('Error creating default settings:', error);
+      } else {
+        // Update cache with default values
+        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%' });
       }
     } catch (error) {
       console.error('Error creating default settings:', error);
@@ -361,29 +580,29 @@ export class DataLayer {
   };
 
   // RSS fetching
-  static fetchRSSFeed = async (url: string): Promise<any> => {
+  static fetchRSSFeed = async (url: string): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
-    let fetchTimes: Record<string, number> = {};
-    try {
-      fetchTimes = JSON.parse(localStorage.getItem(FEED_FETCH_TIMES_KEY) || '{}');
-    } catch {}
+    const feed = await DataLayer.getFeedByUrl(url);
     const now = Date.now();
-    const lastFetch = fetchTimes[url] || 0;
     const threeMinutes = 3 * 60 * 1000;
-    if (now - lastFetch < threeMinutes) {
-      console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
-      return {
-        status: 'skipped',
-        feed: { title: 'Development Feed (skipped)' },
-        items: []
-      };
+
+    if (feed && feed.fetchTime) {
+      const lastFetch = new Date(feed.fetchTime).getTime();
+
+      if (now - lastFetch < threeMinutes) {
+        console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
+        return {
+          status: 'skipped',
+          feed: { title: 'Feed (skipped)' },
+          items: []
+        };
+      }
     }
-    fetchTimes[url] = now;
-    localStorage.setItem(FEED_FETCH_TIMES_KEY, JSON.stringify(fetchTimes));
 
     try {
-      // Use RSS2JSON API which is browser-compatible
-      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(url)}`;
+      const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
+
       const response = await fetch(apiUrl);
 
       if (!response.ok) {
@@ -396,7 +615,25 @@ export class DataLayer {
         throw new Error(data.message || 'Failed to parse RSS feed');
       }
 
-      return data;
+      // Transform the API response to match the expected format
+      // The API returns { title, description, items } but we need { feed: { title }, items }
+      const feedTitle = data.title || DataLayer.extractTitleFromUrl(url) || 'Unknown Feed';
+      const transformedData = {
+        status: data.status,
+        feed: { title: feedTitle },
+        items: data.items || []
+      };
+
+      // Update fetch time in database after successful fetch
+      if (feed) {
+        const updatedFeed: Feed = {
+          ...feed,
+          fetchTime: new Date().toISOString()
+        };
+        await DataLayer.saveFeed(updatedFeed);
+      }
+
+      return transformedData;
     } catch (error) {
       console.error('Error fetching RSS feed:', error);
       throw error;
@@ -405,7 +642,7 @@ export class DataLayer {
 
   // Business logic helpers
   static setSortOrderForArticles = (articles: Article[], mode: 'chronological' | 'unreadOnTop'): Article[] => {
-    let sorted = [...articles];
+    const sorted = [...articles];
     if (mode === 'chronological') {
       sorted.sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     } else {
@@ -429,62 +666,92 @@ export class DataLayer {
     }
   };
 
-  static createArticlesFromRSSData = (data: any, feedId: string, feedTitle: string): Article[] => {
-    return data.items?.map((item: any, index: number) => ({
-      id: crypto.randomUUID(),
-      title: item.title || 'Untitled',
-      description: item.description?.replace(/<[^>]*>/g, '') || '',
-      content: item.content || item.description || '',
-      url: item.link || '',
-      publishedAt: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
-      feedId,
-      feedTitle,
-      isRead: false,
-      isStarred: false,
-      isBookmarked: false,
-      author: item.author || '',
-      sortOrder: 0
-    })) || [];
+  static createArticlesFromRSSData = (data: { items?: unknown[] }, feedId: string, feedTitle: string): Article[] => {
+    return data.items?.map((item: unknown, index: number) => {
+      const rssItem = item as { title?: string; description?: string; content?: string; link?: string; pubDate?: string; author?: string };
+      return {
+        id: crypto.randomUUID(),
+        title: rssItem.title || 'Untitled',
+        description: rssItem.description?.replace(/<[^>]*>/g, '') || '',
+        content: rssItem.content || rssItem.description || '',
+        url: rssItem.link || '',
+        publishedAt: rssItem.pubDate ? new Date(rssItem.pubDate).toISOString() : new Date().toISOString(),
+        feedId,
+        feedTitle,
+        isRead: false,
+        isStarred: false,
+        isBookmarked: false,
+        author: rssItem.author || '',
+        sortOrder: 0
+      };
+    }) || [];
   };
 
-  static cleanupOldArticles = async (articles: Article[], currentFeedArticleUrls: Set<string>): Promise<Article[]> => {
-    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000);
-    const articlesToKeep = articles.filter(article => {
-      // Keep article if:
-      // 1. It's not read, OR
-      // 2. It's newer than 48 hours, OR
-      // 3. It's still present in the current feed data, OR
-      // 4. It's starred or bookmarked
-      return (
-        !article.isRead ||
-        new Date(article.publishedAt) > fortyEightHoursAgo ||
-        currentFeedArticleUrls.has(article.url) ||
-        article.isStarred ||
-        article.isBookmarked
+
+  // New cleanup method that deletes articles older than the earliest article date for a specific feed
+  static cleanupArticlesByEarliestDate = async (feedId: string, newArticles: Article[]): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      // Get the earliest (oldest) article date from the newly fetched articles
+      if (newArticles.length === 0) return;
+
+      const earliestDate = new Date(
+        Math.min(...newArticles.map(article => new Date(article.publishedAt).getTime()))
       );
-    });
 
-    // Delete articles that should be removed from the database
-    const articlesToDelete = articles.filter(article => !articlesToKeep.includes(article));
-    if (articlesToDelete.length > 0) {
-      try {
-        const { data: user } = await supabase.auth.getUser();
-        if (user.user) {
-          const { error } = await supabase
-            .from('articles')
-            .delete()
-            .eq('user_id', user.user.id)
-            .in('id', articlesToDelete.map(a => a.id));
+      // Delete all articles for this feed that are older than the earliest article date
+      // BUT preserve articles that are unread, starred, or bookmarked
+      const { error } = await supabase
+        .from('articles')
+        .delete()
+        .eq('user_id', user.user.id)
+        .eq('feed_id', feedId)
+        .lt('published_at', earliestDate.toISOString())
+        .eq('is_read', true)  // Only delete articles that have been read
+        .eq('is_starred', false)  // Don't delete starred articles
+        .eq('is_bookmarked', false);  // Don't delete bookmarked articles
 
-          if (error) {
-            console.error('Error deleting old articles:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error deleting old articles:', error);
+      if (error) {
+        console.error('Error deleting articles older than earliest date:', error);
+      } else {
+        // console.log(`Cleaned up read articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
       }
+    } catch (error) {
+      console.error('Error in cleanupArticlesByEarliestDate:', error);
     }
+  };
 
-    return articlesToKeep;
+  // Helper method to extract a title from URL when RSS feed doesn't have one
+  static extractTitleFromUrl = (url: string): string | null => {
+    try {
+      const urlObj = new URL(url);
+      const hostname = urlObj.hostname;
+
+      // Remove www. prefix if present
+      const domain = hostname.replace(/^www\./, '');
+
+      // Split by dots and take the main domain name
+      const parts = domain.split('.');
+      if (parts.length >= 2) {
+        // For domains like techcrunch.com, take the first part
+        // For domains like news.google.com, take the second part (google)
+        if (parts.length === 2) {
+          return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        } else if (parts.length === 3 && parts[1].length <= 3) {
+          // Handle cases like news.google.com -> Google
+          return parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
+        } else {
+          // For longer domains, take the first meaningful part
+          return parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+        }
+      }
+
+      return domain.charAt(0).toUpperCase() + domain.slice(1);
+    } catch (error) {
+      console.error('Error extracting title from URL:', error);
+      return null;
+    }
   };
 }

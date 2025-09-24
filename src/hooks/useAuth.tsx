@@ -1,9 +1,15 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
-import { Tables } from '@/integrations/supabase/types';
+import { DataLayer } from '@/services/dataLayer';
 
-type Profile = Tables<'profiles'>;
+interface Profile {
+  id: string;
+  user_id: string;
+  display_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 interface AuthContextType {
   user: User | null;
@@ -12,6 +18,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, displayName?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
+  clearExpiredToken: () => Promise<void>;
   loading: boolean;
 }
 
@@ -22,6 +29,7 @@ const AuthContext = createContext<AuthContextType>({
   signUp: async () => ({ error: null }),
   signIn: async () => ({ error: null }),
   signOut: async () => {},
+  clearExpiredToken: async () => {},
   loading: true,
 });
 
@@ -43,33 +51,28 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Function to fetch user profile
+  // Function to fetch user profile using DataLayer
   const fetchProfile = async (userId: string) => {
-    try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .single();
-      
-      if (error) {
-        console.error('Error fetching profile:', error);
-        return null;
-      }
-      
-      return data;
-    } catch (error) {
-      console.error('Error fetching profile:', error);
-      return null;
-    }
+    return await DataLayer.loadUserProfile(userId);
   };
 
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
+        // Handle token expiration errors
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          console.log('Token expired, clearing local storage');
+          await supabase.auth.signOut({ scope: 'local' });
+          localStorage.removeItem('supabase.auth.token');
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+        } else {
+          setSession(session);
+          setUser(session?.user ?? null);
+        }
+
         // End loading based on auth state immediately; fetch profile in background
         setLoading(false);
 
@@ -84,7 +87,20 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
     // THEN check for existing session
     (async () => {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        // Handle JWT expiration errors during session retrieval
+        if (error && error.message?.includes('token is expired')) {
+          console.log('Session token expired, clearing local storage');
+          await supabase.auth.signOut({ scope: 'local' });
+          localStorage.removeItem('supabase.auth.token');
+          setSession(null);
+          setUser(null);
+          setProfile(null);
+          setLoading(false);
+          return;
+        }
+
         setSession(session);
         setUser(session?.user ?? null);
         // End loading as soon as session is known; fetch profile in background
@@ -109,7 +125,7 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
   const signUp = async (email: string, password: string, displayName?: string) => {
     const redirectUrl = `${window.location.origin}/`;
-    
+
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -123,42 +139,64 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
     // Create profile if signup was successful
     if (!error && data.user) {
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .insert({
-          user_id: data.user.id,
-          display_name: displayName || null,
-        });
-
-      if (profileError) {
-        console.error('Error creating profile:', profileError);
-      }
+      await DataLayer.createUserProfile(data.user.id, displayName || undefined);
     }
 
     return { error };
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    return { error };
+    try {
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      // Handle JWT expiration errors during sign in
+      if (error && error.message?.includes('token is expired')) {
+        console.log('Sign in token expired, clearing local storage');
+        await supabase.auth.signOut({ scope: 'local' });
+        localStorage.removeItem('supabase.auth.token');
+
+        // Retry sign in after clearing expired token
+        const { error: retryError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        return { error: retryError };
+      }
+
+      return { error };
+    } catch (error) {
+      console.error('Sign in error:', error);
+      return { error };
+    }
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
   };
 
+  const clearExpiredToken = async () => {
+    console.log('Manually clearing expired token');
+    await supabase.auth.signOut({ scope: 'local' });
+    localStorage.removeItem('supabase.auth.token');
+    setSession(null);
+    setUser(null);
+    setProfile(null);
+  };
+
   return (
-    <AuthContext.Provider value={{ 
-      user, 
-      session, 
+    <AuthContext.Provider value={{
+      user,
+      session,
       profile,
-      signUp, 
-      signIn, 
-      signOut, 
-      loading 
+      signUp,
+      signIn,
+      signOut,
+      clearExpiredToken,
+      loading
     }}>
       {children}
     </AuthContext.Provider>

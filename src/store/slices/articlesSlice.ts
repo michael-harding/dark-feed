@@ -40,6 +40,7 @@ export const updateArticle = createAsyncThunk(
   }
 );
 
+
 const articlesSlice = createSlice({
   name: 'articles',
   initialState,
@@ -125,14 +126,6 @@ const articlesSlice = createSlice({
       let filtered = DataLayer.filterArticles(state.articles, selectedFeed);
       state.filteredArticles = DataLayer.setSortOrderForArticles(filtered, sortMode);
     },
-    cleanupOldArticles: (state, action: PayloadAction<Set<string>>) => {
-      const currentFeedArticleUrls = action.payload;
-      // This will be handled async in the background - create a plain copy
-      const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-      DataLayer.cleanupOldArticles(plainArticles, currentFeedArticleUrls).then(cleanedArticles => {
-        // The next load will have cleaned data
-      });
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -178,14 +171,11 @@ const articlesSlice = createSlice({
 
           state.articles.push(...newArticles);
 
-          // Cleanup old articles for this feed async - create a plain copy
-          const currentFeedArticleUrls = new Set(action.payload.articles.map((a: Article) => a.url));
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.cleanupOldArticles(plainArticles, currentFeedArticleUrls).then(() => {
-            // Update state will happen on next load
-          });
+          // Note: cleanup is now handled directly in the refreshFeed thunk
+          // using the new cleanupArticlesByEarliestDate method
 
           // Save to database async - create a plain copy
+          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
           DataLayer.saveArticles(plainArticles);
         }
       })
@@ -225,14 +215,11 @@ const articlesSlice = createSlice({
           );
           state.articles.push(...filteredNewArticles);
 
-          // Cleanup old articles async - create a plain copy
-          const allCurrentUrls = new Set(state.articles.map(a => a.url));
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.cleanupOldArticles(plainArticles, allCurrentUrls).then(() => {
-            // Update state will happen on next load
-          });
+          // Note: cleanup is now handled directly in the refreshAllFeeds thunk
+          // using the new cleanupArticlesByEarliestDate method
 
           // Save to database async - create a plain copy
+          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
           DataLayer.saveArticles(plainArticles);
         }
       });
@@ -247,7 +234,6 @@ export const {
   updateArticlesFeedTitle,
   markAllAsReadForFeed,
   updateFilteredArticles,
-  cleanupOldArticles,
 } = articlesSlice.actions;
 
 export default articlesSlice.reducer;
