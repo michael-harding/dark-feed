@@ -592,7 +592,7 @@ export class DataLayer {
     // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
     const feed = await DataLayer.getFeedByUrl(url);
     const now = Date.now();
-    const threeMinutes = 3 * 60 * 1000;
+    const threeMinutes = 0 * 60 * 1000;
 
     if (feed && feed.fetchTime) {
       const lastFetch = new Date(feed.fetchTime).getTime();
@@ -609,7 +609,6 @@ export class DataLayer {
 
     try {
       const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
-      console.log(feed.title, feed.fetchTime, feedTimeFilter);
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
