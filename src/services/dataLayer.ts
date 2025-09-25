@@ -277,22 +277,30 @@ export class DataLayer {
     }
   };
 
-  static saveFeed = async (feed: Feed): Promise<void> => {
+  static saveFeed = async (feed: Feed, fieldsToUpdate?: (keyof Feed)[]): Promise<void> => {
     try {
       const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
 
+      // If no specific fields are specified, update all fields (backward compatibility)
+      const fields = fieldsToUpdate || ['id', 'title', 'url', 'unreadCount', 'category', 'fetchTime'];
+
+      // Build the update object with only the specified fields
+      const updateData: any = {
+        id: feed.id,
+        user_id: user.user.id,
+        url: feed.url,
+        title: feed.title,
+      };
+
+      // if (fields.includes('title')) updateData.title = feed.title;
+      if (fields.includes('unreadCount')) updateData.unread_count = feed.unreadCount;
+      if (fields.includes('category')) updateData.category = feed.category;
+      if (fields.includes('fetchTime')) updateData.fetch_time = feed.fetchTime;
+
       const { error } = await supabase
         .from('feeds')
-        .upsert({
-          id: feed.id,
-          user_id: user.user.id,
-          title: feed.title,
-          url: feed.url,
-          unread_count: feed.unreadCount,
-          category: feed.category,
-          fetch_time: feed.fetchTime
-        });
+        .upsert(updateData);
 
       if (error) {
         console.error('Error saving feed:', error);
@@ -631,7 +639,7 @@ export class DataLayer {
           ...feed,
           fetchTime: new Date().toISOString()
         };
-        await DataLayer.saveFeed(updatedFeed);
+        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
       }
 
       return transformedData;

@@ -38,11 +38,11 @@ export const addFeed = createAsyncThunk(
         title: data.feed?.title || 'Unknown Feed',
         url: url,
         unreadCount: data.items?.length || 0,
-        category: undefined,
-        fetchTime: new Date().toISOString()
+        category: null,
+        fetchTime: null
       };
 
-      await DataLayer.saveFeed(newFeed);
+      await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
 
       const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -83,10 +83,10 @@ export const importFeeds = createAsyncThunk(
             url: feed.url,
             unreadCount: data.items?.length || 0,
             category: feed.category,
-            fetchTime: new Date().toISOString()
+            fetchTime: null
           };
 
-          await DataLayer.saveFeed(newFeed);
+          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
 
           const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
           const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -140,7 +140,7 @@ export const refreshFeed = createAsyncThunk(
         ...feed,
         fetchTime: new Date().toISOString()
       };
-      await DataLayer.saveFeed(updatedFeed);
+      await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
 
       return { feedId, articles: newArticles };
     } catch (error) {
@@ -173,7 +173,7 @@ export const refreshAllFeeds = createAsyncThunk(
           ...feed,
           fetchTime: new Date().toISOString()
         };
-        await DataLayer.saveFeed(updatedFeed);
+        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
 
         results.push({ newArticles: feedArticles, feed: updatedFeed });
       } catch (error) {
@@ -203,71 +203,39 @@ const feedsSlice = createSlice({
       const feed = state.feeds.find(f => f.id === action.payload.id);
       if (feed) {
         feed.title = action.payload.newTitle;
-        // Update in database async
+        // Update in database async - only update title
         const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
+        DataLayer.saveFeed(plainFeed, ['title']);
       }
     },
     reorderFeeds: (state, action: PayloadAction<Feed[]>) => {
       state.feeds = action.payload;
-      // Save reordered feeds to database async
-      state.feeds.forEach(feed => {
-        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
-      });
-    },
-    updateUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
-      const feed = state.feeds.find(f => f.id === action.payload.feedId);
-      if (feed) {
-        feed.unreadCount = Math.max(0, action.payload.count);
-        // Update in database async
-        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
-      }
     },
     setFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; count: number }>) => {
       const feed = state.feeds.find(f => f.id === action.payload.feedId);
       if (feed) {
         feed.unreadCount = Math.max(0, action.payload.count);
-        // Update in database async
+        // Update in database async - only update unread count
         const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
+        DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
     updateFeedUnreadCount: (state, action: PayloadAction<{ feedId: string; delta: number }>) => {
       const feed = state.feeds.find(f => f.id === action.payload.feedId);
       if (feed) {
         feed.unreadCount = Math.max(0, feed.unreadCount + action.payload.delta);
-        // Update in database async
+        // Update in database async - only update unread count
         const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
-      }
-    },
-    incrementUnreadCount: (state, action: PayloadAction<string>) => {
-      const feed = state.feeds.find(f => f.id === action.payload);
-      if (feed) {
-        feed.unreadCount++;
-        // Update in database async
-        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
-      }
-    },
-    decrementUnreadCount: (state, action: PayloadAction<string>) => {
-      const feed = state.feeds.find(f => f.id === action.payload);
-      if (feed) {
-        feed.unreadCount = Math.max(0, feed.unreadCount - 1);
-        // Update in database async
-        const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
+        DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
     markAllAsRead: (state, action: PayloadAction<string>) => {
       const feed = state.feeds.find(f => f.id === action.payload);
       if (feed) {
         feed.unreadCount = 0;
-        // Update in database async
+        // Update in database async - only update unread count
         const plainFeed: Feed = JSON.parse(JSON.stringify(feed));
-        DataLayer.saveFeed(plainFeed);
+        DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
   },
@@ -346,11 +314,8 @@ export const {
   removeFeed,
   renameFeed,
   reorderFeeds,
-  updateUnreadCount,
   setFeedUnreadCount,
   updateFeedUnreadCount,
-  incrementUnreadCount,
-  decrementUnreadCount,
   markAllAsRead,
 } = feedsSlice.actions;
 

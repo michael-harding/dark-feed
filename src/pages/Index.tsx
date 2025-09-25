@@ -130,16 +130,6 @@ const Index = () => {
           return;
         }
 
-        // Step 1: Verify and correct all existing unread counts using fresh articles
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
-
-          if (actualUnreadCount !== feed.unreadCount) {
-            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
-          }
-        });
-
         // Step 2: Collect all current article URLs per feed before refresh
         const allCurrentUrlsByFeed = new Map<string, Set<string>>();
         currentFeeds.forEach(feed => {
@@ -170,15 +160,6 @@ const Index = () => {
               }
             });
             currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
-
-            // Update feed unread count for new articles
-            if (newArticles.length > 0) {
-              dispatch(updateFeedUnreadCount({ feedId: feed.id, delta: newArticles.length }));
-              toast({
-                title: 'New Articles',
-                description: `Found ${newArticles.length} new articles for ${feed.title}`,
-              });
-            }
           }
         });
 
