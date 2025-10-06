@@ -709,9 +709,11 @@ export class DataLayer {
         Math.min(...newArticles.map(article => new Date(article.publishedAt).getTime()))
       );
 
+      console.log(`Cleaning up articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
+
       // Delete all articles for this feed that are older than the earliest article date
       // BUT preserve articles that are unread, starred, or bookmarked
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('articles')
         .delete()
         .eq('user_id', user.user.id)
@@ -719,10 +721,13 @@ export class DataLayer {
         .lt('published_at', earliestDate.toISOString())
         .eq('is_read', true)  // Only delete articles that have been read
         .eq('is_starred', false)  // Don't delete starred articles
-        .eq('is_bookmarked', false);  // Don't delete bookmarked articles
+        .eq('is_bookmarked', false)  // Don't delete bookmarked articles
+        .select();
 
       if (error) {
         console.error('Error deleting articles older than earliest date:', error);
+      } else {
+        console.log(`Successfully deleted ${data?.length || 0} articles for feed ${feedId}`);
       }
     } catch (error) {
       console.error('Error in cleanupArticlesByEarliestDate:', error);
