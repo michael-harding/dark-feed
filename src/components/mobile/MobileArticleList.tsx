@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { Article, Feed } from '@/services/dataLayer';
+import { useAppSelector } from '@/store/hooks';
 
 interface MobileArticleListProps {
   articles: Article[];
@@ -35,7 +36,8 @@ export const MobileArticleList = ({
   feeds
 }: MobileArticleListProps) => {
   const sortedArticles = [...articles].sort((a, b) => a.sortOrder - b.sortOrder);
-  
+  const { mobileActionbarPadding } = useAppSelector((state) => state.ui);
+
   const getFeedTitle = () => {
     if (selectedFeed === 'all') return 'All Articles';
     if (selectedFeed === 'starred') return 'Starred Articles';
@@ -47,7 +49,7 @@ export const MobileArticleList = ({
   return (
     <div className="h-screen bg-background flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-border bg-card">
+      <div className={cn("p-4 border-b border-border bg-card", mobileActionbarPadding && "pt-10")}>
         <div className="flex items-center gap-3 mb-3">
           <Button
             variant="ghost"
