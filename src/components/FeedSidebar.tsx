@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check, CheckCheck, LogOut, User } from 'lucide-react';
 import {
   DndContext,
@@ -172,11 +173,11 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
 
 export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { accentColor } = useAppSelector((state) => state.ui);
   const { user, profile, signOut } = useAuth();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag and drop sensors
@@ -413,164 +414,15 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
-        <Dialog open={showSettings} onOpenChange={setShowSettings}>
-          <DialogTrigger asChild>
-            <Button variant="ghost" size="sm" className="w-full justify-start">
-              <Settings className="w-4 h-4 mr-2" />
-              Settings
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Settings</DialogTitle>
-            </DialogHeader>
-            <div className="mt-4 space-y-6">
-              {/* User Account Section */}
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <User className="w-4 h-4" />
-                  Account
-                </h3>
-                <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
-                  <div className="text-sm">
-                    <span className="text-muted-foreground">Signed in as:</span>
-                    <div className="font-medium text-foreground mt-1">{user?.email}</div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full"
-                    onClick={async () => {
-                      await signOut();
-                      setShowSettings(false);
-                    }}
-                  >
-                    <LogOut className="w-4 h-4 mr-2" />
-                    Sign Out
-                  </Button>
-                </div>
-              </div>
-
-              {/* Feed Management Section */}
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <Rss className="w-4 h-4" />
-                  Feed Management
-                </h3>
-
-                {/* Add Feed Form */}
-                <div className="space-y-3 mb-4 p-4 border rounded-lg bg-muted/30">
-                  <label className="text-sm font-medium">Add New Feed</label>
-                  <Input
-                    placeholder="Enter RSS feed URL..."
-                    value={newFeedUrl}
-                    onChange={(e) => setNewFeedUrl(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && handleAddFeed()}
-                    className="bg-background"
-                  />
-                  <Button
-                    onClick={handleAddFeed}
-                    size="sm"
-                    className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                    disabled={isLoading || !newFeedUrl.trim()}
-                  >
-                    <Plus className="w-4 h-4 mr-2" />
-                    {isLoading ? "Adding..." : "Add Feed"}
-                  </Button>
-                </div>
-
-                {/* Import/Export */}
-                <div className="flex gap-2 mb-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={handleExportFeeds}
-                    disabled={feeds.length === 0}
-                  >
-                    <Download className="w-4 h-4 mr-2" />
-                    Export Feeds
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1"
-                    onClick={() => fileInputRef.current?.click()}
-                  >
-                    <Upload className="w-4 h-4 mr-2" />
-                    Import Feeds
-                  </Button>
-                </div>
-              </div>
-
-              {/* Accent Color Section */}
-              <div>
-                <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                  <Palette className="w-4 h-4" />
-                  Accent Color
-                </h3>
-                <div className="grid grid-cols-8 gap-3">
-                  {accentColors.map((colorOption) => (
-                    <button
-                      key={colorOption.name}
-                      className={cn(
-                        "w-full aspect-square rounded-lg border-2 transition-all relative overflow-hidden group",
-                        accentColor === colorOption.value
-                          ? "border-ring shadow-lg scale-105"
-                          : "border-border hover:border-muted-foreground hover:scale-102"
-                      )}
-                      onClick={() => handleAccentColorChange(colorOption.value)}
-                      style={{ backgroundColor: colorOption.hex }}
-                      title={colorOption.name}
-                    >
-                      {accentColor === colorOption.value && (
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <Check className="w-5 h-5 text-white drop-shadow-lg" />
-                        </div>
-                      )}
-                      <div className="absolute inset-x-0 bottom-0 bg-black/50 text-white text-xs py-1 px-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        {colorOption.name}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Feed Management Section */}
-              {feeds.length > 0 && (
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
-                    Manage Feeds
-                  </h3>
-                  <p className="text-xs text-muted-foreground mb-4">
-                    Drag feeds to reorder them in the sidebar
-                  </p>
-                  <div className="max-h-96 overflow-y-auto">
-                    <DndContext
-                      sensors={sensors}
-                      collisionDetection={closestCenter}
-                      onDragEnd={handleDragEnd}
-                    >
-                      <SortableContext items={feeds} strategy={verticalListSortingStrategy}>
-                        <div className="space-y-2">
-                          {feeds.map((feed) => (
-                            <SortableFeedItem
-                              key={feed.id}
-                              feed={feed}
-                              onRemove={onRemoveFeed}
-                              onRename={onRenameFeed}
-                              onMarkAllAsRead={onMarkAllAsRead}
-                            />
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                  </div>
-                </div>
-              )}
-            </div>
-          </DialogContent>
-        </Dialog>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start"
+          onClick={() => navigate('/settings')}
+        >
+          <Settings className="w-4 h-4 mr-2" />
+          Settings
+        </Button>
 
         {/* Hidden file input for import */}
         <input

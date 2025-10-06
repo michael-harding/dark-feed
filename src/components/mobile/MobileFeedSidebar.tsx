@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,11 +41,11 @@ export const MobileFeedSidebar = ({
   isLoading = false
 }: MobileFeedSidebarProps) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { accentColor, mobileActionbarPadding } = useAppSelector((state) => state.ui);
   const { user, profile, signOut } = useAuth();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
-  const [showSettings, setShowSettings] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Predefined accent colors
@@ -182,141 +183,14 @@ export const MobileFeedSidebar = ({
               <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
           )}
-          <Dialog open={showSettings} onOpenChange={setShowSettings}>
-            <DialogTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                <Settings className="w-4 h-4" />
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-sm mx-4">
-              <DialogHeader>
-                <DialogTitle>Settings</DialogTitle>
-              </DialogHeader>
-              <div className="mt-4 space-y-4">
-                {/* User Account Section */}
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                    <User className="w-4 h-4" />
-                    Account
-                  </h3>
-                  <div className="space-y-2 p-3 border rounded-lg bg-muted/30">
-                    <div className="text-xs">
-                      <span className="text-muted-foreground">Signed in as:</span>
-                      <div className="font-medium text-foreground mt-1 break-all">{user?.email}</div>
-                    </div>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full"
-                      onClick={async () => {
-                        await signOut();
-                        setShowSettings(false);
-                      }}
-                    >
-                      <LogOut className="w-4 h-4 mr-2" />
-                      Sign Out
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Add Feed Form */}
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2">Add New Feed</h3>
-                  <div className="space-y-2">
-                    <Input
-                      placeholder="Enter RSS feed URL..."
-                      value={newFeedUrl}
-                      onChange={(e) => setNewFeedUrl(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleAddFeed()}
-                      className="bg-background text-sm"
-                    />
-                    <Button
-                      onClick={handleAddFeed}
-                      size="sm"
-                      className="w-full bg-accent hover:bg-accent/90 text-accent-foreground"
-                      disabled={isLoading || !newFeedUrl.trim()}
-                    >
-                      <Plus className="w-4 h-4 mr-2" />
-                      {isLoading ? "Adding..." : "Add Feed"}
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Import/Export */}
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2">Import/Export</h3>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={handleExportFeeds}
-                      disabled={feeds.length === 0}
-                    >
-                      <Download className="w-4 h-4 mr-1" />
-                      Export
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => fileInputRef.current?.click()}
-                    >
-                      <Upload className="w-4 h-4 mr-1" />
-                      Import
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Accent Color Section */}
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                    <Palette className="w-4 h-4" />
-                    Theme Color
-                  </h3>
-                  <div className="grid grid-cols-4 gap-2">
-                    {accentColors.map((colorOption) => (
-                      <button
-                        key={colorOption.name}
-                        className={cn(
-                          "w-full aspect-square rounded-lg border-2 transition-all relative overflow-hidden",
-                          accentColor === colorOption.value
-                            ? "border-ring shadow-lg scale-105"
-                            : "border-border hover:border-muted-foreground"
-                        )}
-                        onClick={() => handleAccentColorChange(colorOption.value)}
-                        style={{ backgroundColor: colorOption.hex }}
-                        title={colorOption.name}
-                      >
-                        {accentColor === colorOption.value && (
-                          <div className="absolute inset-0 flex items-center justify-center">
-                            <div className="w-3 h-3 bg-white rounded-full" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Mobile Actionbar Padding Section */}
-                <div>
-                  <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
-                    <Smartphone className="w-4 h-4" />
-                    Mobile Actionbar Padding
-                  </h3>
-                  <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
-                    <div className="text-sm text-muted-foreground">
-                      Add extra padding to mobile action bars
-                    </div>
-                    <Switch
-                      checked={mobileActionbarPadding}
-                      onCheckedChange={(checked) => dispatch(setMobileActionbarPadding(checked))}
-                    />
-                  </div>
-                </div>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-8 w-8 p-0"
+            onClick={() => navigate('/settings?isMobile=true')}
+          >
+            <Settings className="w-4 h-4" />
+          </Button>
         </div>
       </div>
 
