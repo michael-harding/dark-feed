@@ -207,85 +207,68 @@ const Mobile = () => {
     dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
   }, [dispatch, selectedFeed, sortMode]);
 
+  // Load feeds when sidebar is shown
+  useEffect(() => {
+    if (currentView === 'feeds' && feeds.length === 0) {
+      const loadFeedsForSidebar = async () => {
+        try {
+          await dispatch(loadFeeds()).unwrap();
+        } catch (error) {
+          console.error('Error loading feeds for sidebar:', error);
+          toast({
+            title: 'Error Loading Feeds',
+            description: 'Failed to load feeds. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      loadFeedsForSidebar();
+    }
+  }, [currentView, dispatch, feeds.length, toast]);
+
+  // Load feeds and articles when a feed is selected
+  useEffect(() => {
+    if (selectedFeed && currentView === 'articles') {
+      const loadFeedData = async () => {
+        try {
+          // Load feeds if not already loaded
+          if (feeds.length === 0) {
+            await dispatch(loadFeeds()).unwrap();
+          }
+
+          // Load articles for the selected feed
+          await dispatch(loadArticles()).unwrap();
+
+          // Update filtered articles for the selected feed
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+        } catch (error) {
+          console.error('Error loading feed data:', error);
+          toast({
+            title: 'Error Loading Feed',
+            description: 'Failed to load feed data. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      loadFeedData();
+    }
+  }, [selectedFeed, currentView, dispatch, feeds.length, sortMode, toast]);
+
   // Initialize app on page load
   useEffect(() => {
     const initializeApp = async () => {
       try {
         await dispatch(loadUserSettings()).unwrap();
-        await dispatch(loadFeeds()).unwrap();
-        await dispatch(loadArticles()).unwrap();
-
-        const currentFeeds = await dispatch(loadFeeds()).unwrap();
-        const currentArticles = await dispatch(loadArticles()).unwrap();
-
-        if (currentFeeds.length === 0) {
-          dispatch(setInitialLoading(false));
-          return;
-        }
-
-        // Verify and correct unread counts
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
-
-          if (actualUnreadCount !== feed.unreadCount) {
-            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
-          }
-        });
-
-        // Refresh feeds and clean up old articles
-        const allCurrentUrlsByFeed = new Map<string, Set<string>>();
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const urls = new Set<string>(feedArticles.map(a => a.url));
-          allCurrentUrlsByFeed.set(feed.id, urls);
-        });
-
-        const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
-
-        const updatedFeedArticleUrls = new Set<string>();
-        result.forEach(({ newArticles, feed, error }) => {
-          if (error) {
-            console.error(`Failed to refresh feed ${feed.title}:`, error);
-            toast({
-              title: 'Feed Refresh Error',
-              description: `${feed.title}: ${error}`,
-              variant: 'destructive',
-            });
-          } else {
-            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
-            newArticles.forEach(article => {
-              if (article.url) {
-                currentUrls.add(article.url);
-              }
-            });
-            currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
-
-            if (newArticles.length > 0) {
-              dispatch(updateFeedUnreadCount({ feedId: feed.id, delta: newArticles.length }));
-              toast({
-                title: 'New Articles',
-                description: `Found ${newArticles.length} new articles for ${feed.title}`,
-              });
-            }
-          }
-        });
-
-        // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
-        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-
-        toast({
-          title: "Feeds Refreshed",
-          description: "Checked for new articles",
-        });
+        dispatch(setInitialLoading(false));
       } catch (error) {
-        console.error('Error refreshing feeds:', error);
+        console.error('Error initializing app:', error);
         toast({
-          title: 'Feeds Refresh Error',
+          title: 'Initialization Error',
           description: String(error),
           variant: 'destructive',
         });
-      } finally {
         dispatch(setInitialLoading(false));
       }
     };
@@ -515,7 +498,7 @@ const Mobile = () => {
           onRenameFeed={handleRenameFeed}
           onMarkAllAsRead={handleMarkAllAsRead}
           onReorderFeeds={handleReorderFeeds}
-          isLoading={isLoading}
+          isLoading={isLoading && feeds.length === 0}
         />
       )}
 
@@ -532,6 +515,7 @@ const Mobile = () => {
           onBack={handleBackToFeeds}
           selectedFeed={selectedFeed}
           feeds={feeds}
+          isLoading={isLoading}
         />
       )}
 
