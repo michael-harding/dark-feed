@@ -719,7 +719,8 @@ export class DataLayer {
         .lt('published_at', earliestDate.toISOString())
         .eq('is_read', true)  // Only delete articles that have been read
         .eq('is_starred', false)  // Don't delete starred articles
-        .eq('is_bookmarked', false);  // Don't delete bookmarked articles
+        .eq('is_bookmarked', false)  // Don't delete bookmarked articles
+        .select();
 
       if (error) {
         console.error('Error deleting articles older than earliest date:', error);
