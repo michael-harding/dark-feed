@@ -64,7 +64,7 @@ const Mobile = () => {
   }, []);
 
   // Update URL without triggering navigation
-  const updateURL = useCallback((view: MobileView, feedId?: string, articleId?: string) => {
+  const updateURL = useCallback((view: MobileView, feedId?: string, articleId?: string, replaceState = false) => {
     let url = '/m';
 
     if (view === 'articles' && feedId) {
@@ -73,16 +73,28 @@ const Mobile = () => {
       url = `/m/feed/${feedId}/article/${articleId}`;
     }
 
-    window.history.pushState({ view, feedId, articleId }, '', url);
+    // Use replaceState when going back to previous view to avoid duplicate history entries
+    // Use pushState for forward navigation to create new history entries
+    if (replaceState) {
+      window.history.replaceState({ view, feedId, articleId }, '', url);
+    } else {
+      window.history.pushState({ view, feedId, articleId }, '', url);
+    }
   }, []);
 
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
+      console.log('PopState triggered:', {
+        state: event.state,
+        currentURL: window.location.pathname,
+        historyLength: window.history.length
+      });
+
       const state = event.state;
-      if (state) {
+      if (state && state.view) {
         setCurrentView(state.view);
-        if (state.feedId) {
+        if (state.feedId && state.feedId !== 'feed' && state.feedId !== 'article') {
           dispatch(selectFeed(state.feedId));
         } else {
           dispatch(selectFeed(null));
@@ -137,7 +149,7 @@ const Mobile = () => {
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [dispatch, getCurrentView]);
+  }, [dispatch]);
 
   // Initialize view from URL on mount
   useEffect(() => {
@@ -306,6 +318,25 @@ const Mobile = () => {
 
   // Handle view changes based on selections
   useEffect(() => {
+    // Check if this is a browser back/forward navigation
+    const isBrowserNavigation = window.history.state &&
+      ((selectedArticle && window.history.state.articleId === selectedArticle) ||
+       (selectedFeed && window.history.state.feedId === selectedFeed && !selectedArticle) ||
+       (!selectedFeed && !selectedArticle && window.history.state.view === 'feeds'));
+
+    if (isBrowserNavigation) {
+      // Browser navigation - just update the view without changing URL
+      if (selectedArticle) {
+        setCurrentView('reader');
+      } else if (selectedFeed) {
+        setCurrentView('articles');
+      } else {
+        setCurrentView('feeds');
+      }
+      return;
+    }
+
+    // Manual navigation - update URL
     if (selectedArticle) {
       setCurrentView('reader');
       const article = articles.find(a => a.id === selectedArticle);
@@ -319,7 +350,7 @@ const Mobile = () => {
       setCurrentView('feeds');
       updateURL('feeds');
     }
-  }, [selectedFeed, selectedArticle, updateURL, articles]);
+  }, [selectedFeed, selectedArticle, articles]);
 
   // Handlers
   const handleAddFeed = async (url: string) => {
@@ -479,7 +510,6 @@ const Mobile = () => {
 
   const handleFeedSelect = (feedId: string) => {
     dispatch(selectFeed(feedId));
-    updateURL('articles', feedId);
   };
 
   const handleArticleSelect = (articleId: string) => {
@@ -488,7 +518,6 @@ const Mobile = () => {
     if (article && !article.isRead) {
       handleMarkAsRead(articleId);
     }
-    updateURL('reader', article?.feedId, articleId);
   };
 
   const handleBackToFeeds = () => {
@@ -499,8 +528,6 @@ const Mobile = () => {
 
   const handleBackToArticles = () => {
     dispatch(selectArticle(null));
-    // Keep the selectedFeed when going back to articles
-    updateURL('articles', selectedFeed, undefined);
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
