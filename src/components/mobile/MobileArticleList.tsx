@@ -20,6 +20,7 @@ interface MobileArticleListProps {
   onBack: () => void;
   selectedFeed: string | null;
   feeds: Feed[];
+  isLoading?: boolean;
 }
 
 export const MobileArticleList = ({
@@ -33,10 +34,14 @@ export const MobileArticleList = ({
   onToggleSortMode,
   onBack,
   selectedFeed,
-  feeds
+  feeds,
+  isLoading = false
 }: MobileArticleListProps) => {
   const sortedArticles = [...articles].sort((a, b) => a.sortOrder - b.sortOrder);
   const { mobileActionbarPadding } = useAppSelector((state) => state.ui);
+
+  // Show loading state when feeds are loading or when we have a selected feed but no articles yet
+  const showLoading = isLoading || (selectedFeed && articles.length === 0 && feeds.length === 0);
 
   const getFeedTitle = () => {
     if (selectedFeed === 'all') return 'All Articles';
@@ -78,7 +83,14 @@ export const MobileArticleList = ({
 
       {/* Articles List */}
       <div className="flex-1 overflow-y-auto">
-        {articles.length === 0 ? (
+        {showLoading ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-accent mx-auto mb-4"></div>
+              <p className="text-muted-foreground">Loading articles...</p>
+            </div>
+          </div>
+        ) : articles.length === 0 ? (
           <div className="p-6 text-center">
             <p className="text-muted-foreground">No articles found</p>
             <p className="text-sm text-muted-foreground mt-1">

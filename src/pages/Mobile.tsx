@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MobileFeedSidebar } from '@/components/mobile/MobileFeedSidebar';
 import { MobileArticleList } from '@/components/mobile/MobileArticleList';
@@ -18,6 +18,7 @@ import {
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
+  clearSessionCache,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -48,6 +49,140 @@ const Mobile = () => {
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<MobileView>('feeds');
 
+  // Get current view from URL path
+  const getCurrentView = useCallback((): MobileView => {
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    // Handle mobile routes: /m, /m/feed/{id}, /m/feed/{id}/article/{id}
+    if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+      if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
+        return 'reader';
+      } else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
+        return 'articles';
+      }
+    }
+    return 'feeds';
+  }, []);
+
+  // Update URL without triggering navigation
+  const updateURL = useCallback((view: MobileView, feedId?: string, articleId?: string, replaceState = false) => {
+    let url = '/m';
+
+    if (view === 'articles' && feedId) {
+      url = `/m/feed/${feedId}`;
+    } else if (view === 'reader' && feedId && articleId) {
+      url = `/m/feed/${feedId}/article/${articleId}`;
+    }
+
+    // Use replaceState when going back to previous view to avoid duplicate history entries
+    // Use pushState for forward navigation to create new history entries
+    if (replaceState) {
+      window.history.replaceState({ view, feedId, articleId }, '', url);
+    } else {
+      window.history.pushState({ view, feedId, articleId }, '', url);
+    }
+  }, []);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      console.log('PopState triggered:', {
+        state: event.state,
+        currentURL: window.location.pathname,
+        historyLength: window.history.length
+      });
+
+      const state = event.state;
+      if (state && state.view) {
+        setCurrentView(state.view);
+        if (state.feedId && state.feedId !== 'feed' && state.feedId !== 'article') {
+          dispatch(selectFeed(state.feedId));
+        } else {
+          dispatch(selectFeed(null));
+        }
+        if (state.articleId) {
+          dispatch(selectArticle(state.articleId));
+        } else {
+          dispatch(selectArticle(null));
+        }
+      } else {
+        // Fallback to URL parsing if no state
+        const view = getCurrentView();
+        setCurrentView(view);
+
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+          // Handle /m/feed/{feedId}/article/{articleId}
+          if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
+            const feedId = pathSegments[2];
+            const articleId = pathSegments[4];
+
+            if (feedId && feedId !== 'feed' && feedId !== 'article') {
+              dispatch(selectFeed(feedId));
+            }
+
+            if (articleId) {
+              dispatch(selectArticle(articleId));
+            }
+          }
+          // Handle /m/feed/{feedId}
+          else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
+            const feedId = pathSegments[2];
+
+            if (feedId && feedId !== 'feed' && feedId !== 'article') {
+              dispatch(selectFeed(feedId));
+            } else {
+              dispatch(selectFeed(null));
+            }
+            dispatch(selectArticle(null));
+          }
+          // Handle /m (feeds view)
+          else {
+            dispatch(selectFeed(null));
+            dispatch(selectArticle(null));
+          }
+        } else {
+          dispatch(selectFeed(null));
+          dispatch(selectArticle(null));
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [dispatch]);
+
+  // Initialize view from URL on mount
+  useEffect(() => {
+    const view = getCurrentView();
+    setCurrentView(view);
+
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+      // Handle /m/feed/{feedId}/article/{articleId}
+      if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
+        const feedId = pathSegments[2];
+        const articleId = pathSegments[4];
+
+        if (feedId && feedId !== 'feed' && feedId !== 'article') {
+          dispatch(selectFeed(feedId));
+        }
+
+        if (articleId) {
+          dispatch(selectArticle(articleId));
+        }
+      }
+      // Handle /m/feed/{feedId}
+      else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
+        const feedId = pathSegments[2];
+
+        if (feedId && feedId !== 'feed' && feedId !== 'article') {
+          dispatch(selectFeed(feedId));
+        }
+      }
+      // Handle /m (feeds view) - no feed or article selection needed
+    }
+  }, [dispatch, getCurrentView]);
+
   // Redirect to auth if not authenticated
   useEffect(() => {
     if (!authLoading && !user) {
@@ -56,7 +191,7 @@ const Mobile = () => {
   }, [user, authLoading, navigate]);
 
   // Redux state
-  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
+  const { feeds, isLoading, sessionCache } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
   const {
     selectedFeed,
@@ -112,85 +247,68 @@ const Mobile = () => {
     dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
   }, [dispatch, selectedFeed, sortMode]);
 
+  // Load feeds when sidebar is shown
+  useEffect(() => {
+    if (currentView === 'feeds' && feeds.length === 0 && !sessionCache.feedsLoaded) {
+      const loadFeedsForSidebar = async () => {
+        try {
+          await dispatch(loadFeeds()).unwrap();
+        } catch (error) {
+          console.error('Error loading feeds for sidebar:', error);
+          toast({
+            title: 'Error Loading Feeds',
+            description: 'Failed to load feeds. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      loadFeedsForSidebar();
+    }
+  }, [currentView, dispatch, feeds.length, sessionCache.feedsLoaded, toast]);
+
+  // Load feeds and articles when a feed is selected
+  useEffect(() => {
+    if (selectedFeed && currentView === 'articles') {
+      const loadFeedData = async () => {
+        try {
+          // Load feeds if not already loaded in this session
+          if (feeds.length === 0 && !sessionCache.feedsLoaded) {
+            await dispatch(loadFeeds()).unwrap();
+          }
+
+          // Load articles for the selected feed
+          await dispatch(loadArticles()).unwrap();
+
+          // Update filtered articles for the selected feed
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+        } catch (error) {
+          console.error('Error loading feed data:', error);
+          toast({
+            title: 'Error Loading Feed',
+            description: 'Failed to load feed data. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      };
+
+      loadFeedData();
+    }
+  }, [selectedFeed, currentView, dispatch, feeds.length, sessionCache.feedsLoaded, sortMode, toast]);
+
   // Initialize app on page load
   useEffect(() => {
     const initializeApp = async () => {
       try {
         await dispatch(loadUserSettings()).unwrap();
-        await dispatch(loadFeeds()).unwrap();
-        await dispatch(loadArticles()).unwrap();
-
-        const currentFeeds = await dispatch(loadFeeds()).unwrap();
-        const currentArticles = await dispatch(loadArticles()).unwrap();
-
-        if (currentFeeds.length === 0) {
-          dispatch(setInitialLoading(false));
-          return;
-        }
-
-        // Verify and correct unread counts
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
-
-          if (actualUnreadCount !== feed.unreadCount) {
-            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
-          }
-        });
-
-        // Refresh feeds and clean up old articles
-        const allCurrentUrlsByFeed = new Map<string, Set<string>>();
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const urls = new Set<string>(feedArticles.map(a => a.url));
-          allCurrentUrlsByFeed.set(feed.id, urls);
-        });
-
-        const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
-
-        const updatedFeedArticleUrls = new Set<string>();
-        result.forEach(({ newArticles, feed, error }) => {
-          if (error) {
-            console.error(`Failed to refresh feed ${feed.title}:`, error);
-            toast({
-              title: 'Feed Refresh Error',
-              description: `${feed.title}: ${error}`,
-              variant: 'destructive',
-            });
-          } else {
-            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
-            newArticles.forEach(article => {
-              if (article.url) {
-                currentUrls.add(article.url);
-              }
-            });
-            currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
-
-            if (newArticles.length > 0) {
-              dispatch(updateFeedUnreadCount({ feedId: feed.id, delta: newArticles.length }));
-              toast({
-                title: 'New Articles',
-                description: `Found ${newArticles.length} new articles for ${feed.title}`,
-              });
-            }
-          }
-        });
-
-        // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
-        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-
-        toast({
-          title: "Feeds Refreshed",
-          description: "Checked for new articles",
-        });
+        dispatch(setInitialLoading(false));
       } catch (error) {
-        console.error('Error refreshing feeds:', error);
+        console.error('Error initializing app:', error);
         toast({
-          title: 'Feeds Refresh Error',
+          title: 'Initialization Error',
           description: String(error),
           variant: 'destructive',
         });
-      } finally {
         dispatch(setInitialLoading(false));
       }
     };
@@ -200,12 +318,39 @@ const Mobile = () => {
 
   // Handle view changes based on selections
   useEffect(() => {
+    // Check if this is a browser back/forward navigation
+    const isBrowserNavigation = window.history.state &&
+      ((selectedArticle && window.history.state.articleId === selectedArticle) ||
+       (selectedFeed && window.history.state.feedId === selectedFeed && !selectedArticle) ||
+       (!selectedFeed && !selectedArticle && window.history.state.view === 'feeds'));
+
+    if (isBrowserNavigation) {
+      // Browser navigation - just update the view without changing URL
+      if (selectedArticle) {
+        setCurrentView('reader');
+      } else if (selectedFeed) {
+        setCurrentView('articles');
+      } else {
+        setCurrentView('feeds');
+      }
+      return;
+    }
+
+    // Manual navigation - update URL
     if (selectedArticle) {
       setCurrentView('reader');
+      const article = articles.find(a => a.id === selectedArticle);
+      if (article) {
+        updateURL('reader', article.feedId, selectedArticle);
+      }
     } else if (selectedFeed) {
       setCurrentView('articles');
+      updateURL('articles', selectedFeed, undefined);
+    } else {
+      setCurrentView('feeds');
+      updateURL('feeds');
     }
-  }, [selectedFeed, selectedArticle]);
+  }, [selectedFeed, selectedArticle, articles]);
 
   // Handlers
   const handleAddFeed = async (url: string) => {
@@ -301,8 +446,9 @@ const Mobile = () => {
     dispatch(removeArticlesByFeed(feedId));
 
     if (selectedFeed === feedId) {
-      dispatch(selectFeed('all'));
-      setCurrentView('feeds');
+      dispatch(selectFeed(null));
+      dispatch(selectArticle(null));
+      updateURL('feeds');
     }
 
     toast({
@@ -340,13 +486,30 @@ const Mobile = () => {
     });
   };
 
+  const handleRefreshFeeds = async () => {
+    try {
+      // Clear session cache to force fresh data load
+      dispatch(clearSessionCache());
+      await dispatch(refreshAllFeeds(feeds)).unwrap();
+      toast({
+        title: "Feeds Refreshed",
+        description: "All feeds have been updated with the latest content.",
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh Error",
+        description: "Failed to refresh feeds. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleToggleSortMode = () => {
     dispatch(toggleSortMode());
   };
 
   const handleFeedSelect = (feedId: string) => {
     dispatch(selectFeed(feedId));
-    setCurrentView('articles');
   };
 
   const handleArticleSelect = (articleId: string) => {
@@ -355,18 +518,16 @@ const Mobile = () => {
     if (article && !article.isRead) {
       handleMarkAsRead(articleId);
     }
-    setCurrentView('reader');
   };
 
   const handleBackToFeeds = () => {
     dispatch(selectFeed(null));
     dispatch(selectArticle(null));
-    setCurrentView('feeds');
+    updateURL('feeds', undefined, undefined);
   };
 
   const handleBackToArticles = () => {
     dispatch(selectArticle(null));
-    setCurrentView('articles');
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
@@ -412,7 +573,8 @@ const Mobile = () => {
           onRenameFeed={handleRenameFeed}
           onMarkAllAsRead={handleMarkAllAsRead}
           onReorderFeeds={handleReorderFeeds}
-          isLoading={isLoading}
+          onRefreshFeeds={handleRefreshFeeds}
+          isLoading={isLoading && feeds.length === 0}
         />
       )}
 
@@ -429,6 +591,7 @@ const Mobile = () => {
           onBack={handleBackToFeeds}
           selectedFeed={selectedFeed}
           feeds={feeds}
+          isLoading={isLoading}
         />
       )}
 

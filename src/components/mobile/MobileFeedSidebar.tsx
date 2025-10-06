@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -22,6 +22,7 @@ interface MobileFeedSidebarProps {
   onRenameFeed: (feedId: string, newTitle: string) => void;
   onMarkAllAsRead: (feedId: string) => void;
   onReorderFeeds: (reorderedFeeds: Feed[]) => void;
+  onRefreshFeeds?: () => void;
   isLoading?: boolean;
 }
 
@@ -35,6 +36,7 @@ export const MobileFeedSidebar = ({
   onRenameFeed,
   onMarkAllAsRead,
   onReorderFeeds,
+  onRefreshFeeds,
   isLoading = false
 }: MobileFeedSidebarProps) => {
   const dispatch = useAppDispatch();
@@ -169,6 +171,17 @@ export const MobileFeedSidebar = ({
               </p>
             )}
           </div>
+          {onRefreshFeeds && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 w-8 p-0"
+              onClick={onRefreshFeeds}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+            </Button>
+          )}
           <Dialog open={showSettings} onOpenChange={setShowSettings}>
             <DialogTrigger asChild>
               <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
