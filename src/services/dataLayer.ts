@@ -711,36 +711,23 @@ export class DataLayer {
 
       console.log(`Cleaning up articles for feed ${feedId} older than ${earliestDate.toISOString()}`);
 
-      // First count how many articles match the criteria
-      const { count: matchCount } = await supabase
-        .from('articles')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.user.id)
-        .eq('feed_id', feedId)
-        .lt('published_at', earliestDate.toISOString())
-        .eq('is_read', true)
-        .eq('is_starred', false)
-        .eq('is_bookmarked', false);
-
-      console.log(`Found ${matchCount} articles matching deletion criteria`);
-
       // Delete all articles for this feed that are older than the earliest article date
       // BUT preserve articles that are unread, starred, or bookmarked
-      const { error, count } = await supabase
+      const { data, error } = await supabase
         .from('articles')
-        .delete({ count: 'exact' })
+        .delete()
         .eq('user_id', user.user.id)
         .eq('feed_id', feedId)
         .lt('published_at', earliestDate.toISOString())
         .eq('is_read', true)  // Only delete articles that have been read
         .eq('is_starred', false)  // Don't delete starred articles
-        .eq('is_bookmarked', false);  // Don't delete bookmarked articles
+        .eq('is_bookmarked', false)  // Don't delete bookmarked articles
+        .select();
 
       if (error) {
         console.error('Error deleting articles older than earliest date:', error);
-        console.error('Full error details:', JSON.stringify(error));
       } else {
-        console.log(`Successfully deleted ${count} articles for feed ${feedId}`);
+        console.log(`Successfully deleted ${data?.length || 0} articles for feed ${feedId}`);
       }
     } catch (error) {
       console.error('Error in cleanupArticlesByEarliestDate:', error);
