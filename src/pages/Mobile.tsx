@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { MobileFeedSidebar } from '@/components/mobile/MobileFeedSidebar';
 import { MobileArticleList } from '@/components/mobile/MobileArticleList';
@@ -47,6 +47,101 @@ const Mobile = () => {
   const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const [currentView, setCurrentView] = useState<MobileView>('feeds');
+
+  // Get current view from URL path
+  const getCurrentView = useCallback((): MobileView => {
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    // Handle both /m and /m/feed/123/article/456 patterns
+    if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+      if (pathSegments.length >= 4 && pathSegments[3] === 'article') {
+        return 'reader';
+      } else if (pathSegments.length >= 3 && pathSegments[2] !== '') {
+        return 'articles';
+      }
+    }
+    return 'feeds';
+  }, []);
+
+  // Update URL without triggering navigation
+  const updateURL = useCallback((view: MobileView, feedId?: string, articleId?: string) => {
+    let url = '/m';
+
+    if (view === 'articles' && feedId) {
+      url = `/m/feed/${feedId}`;
+    } else if (view === 'reader' && feedId && articleId) {
+      url = `/m/feed/${feedId}/article/${articleId}`;
+    }
+
+    window.history.pushState({ view, feedId, articleId }, '', url);
+  }, []);
+
+  // Handle browser back/forward buttons
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state;
+      if (state) {
+        setCurrentView(state.view);
+        if (state.feedId) {
+          dispatch(selectFeed(state.feedId));
+        } else {
+          dispatch(selectFeed(null));
+        }
+        if (state.articleId) {
+          dispatch(selectArticle(state.articleId));
+        } else {
+          dispatch(selectArticle(null));
+        }
+      } else {
+        // Fallback to URL parsing if no state
+        const view = getCurrentView();
+        setCurrentView(view);
+
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+          const feedId = pathSegments[2];
+          const articleId = pathSegments[4];
+
+          if (feedId && feedId !== 'feed' && feedId !== 'article') {
+            dispatch(selectFeed(feedId));
+          } else {
+            dispatch(selectFeed(null));
+          }
+
+          if (articleId) {
+            dispatch(selectArticle(articleId));
+          } else {
+            dispatch(selectArticle(null));
+          }
+        } else {
+          dispatch(selectFeed(null));
+          dispatch(selectArticle(null));
+        }
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [dispatch, getCurrentView]);
+
+  // Initialize view from URL on mount
+  useEffect(() => {
+    const view = getCurrentView();
+    setCurrentView(view);
+
+    const pathSegments = window.location.pathname.split('/').filter(Boolean);
+    if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
+      const feedId = pathSegments[2];
+      const articleId = pathSegments[4];
+
+      if (feedId && feedId !== 'feed' && feedId !== 'article') {
+        dispatch(selectFeed(feedId));
+      }
+
+      if (articleId) {
+        dispatch(selectArticle(articleId));
+      }
+    }
+  }, [dispatch, getCurrentView]);
 
   // Redirect to auth if not authenticated
   useEffect(() => {
@@ -202,10 +297,18 @@ const Mobile = () => {
   useEffect(() => {
     if (selectedArticle) {
       setCurrentView('reader');
+      const article = articles.find(a => a.id === selectedArticle);
+      if (article) {
+        updateURL('reader', article.feedId, selectedArticle);
+      }
     } else if (selectedFeed) {
       setCurrentView('articles');
+      updateURL('articles', selectedFeed, undefined);
+    } else {
+      setCurrentView('feeds');
+      updateURL('feeds');
     }
-  }, [selectedFeed, selectedArticle]);
+  }, [selectedFeed, selectedArticle, updateURL, articles]);
 
   // Handlers
   const handleAddFeed = async (url: string) => {
@@ -302,7 +405,7 @@ const Mobile = () => {
 
     if (selectedFeed === feedId) {
       dispatch(selectFeed('all'));
-      setCurrentView('feeds');
+      updateURL('articles', 'all');
     }
 
     toast({
@@ -346,7 +449,7 @@ const Mobile = () => {
 
   const handleFeedSelect = (feedId: string) => {
     dispatch(selectFeed(feedId));
-    setCurrentView('articles');
+    updateURL('articles', feedId);
   };
 
   const handleArticleSelect = (articleId: string) => {
@@ -355,18 +458,18 @@ const Mobile = () => {
     if (article && !article.isRead) {
       handleMarkAsRead(articleId);
     }
-    setCurrentView('reader');
+    updateURL('reader', article?.feedId, articleId);
   };
 
   const handleBackToFeeds = () => {
     dispatch(selectFeed(null));
     dispatch(selectArticle(null));
-    setCurrentView('feeds');
+    updateURL('feeds');
   };
 
   const handleBackToArticles = () => {
     dispatch(selectArticle(null));
-    setCurrentView('articles');
+    updateURL('articles', selectedFeed);
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
