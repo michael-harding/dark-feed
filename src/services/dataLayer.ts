@@ -67,6 +67,7 @@ export class DataLayer {
 
     // Return cached profile if still valid
     if (DataLayer.profileCache && (now - DataLayer.profileCache.timestamp) < DataLayer.CACHE_TTL) {
+      console.log('DataLayer.ensureProfileLoaded: Using cached profile data');
       return DataLayer.profileCache;
     }
 
@@ -85,11 +86,13 @@ export class DataLayer {
           return defaultData;
         }
 
+        console.log('DataLayer.ensureProfileLoaded: Querying database for user settings');
         const { data, error } = await supabase
           .from('user_settings')
           .select('sort_mode, accent_color')
           .eq('user_id', user.user.id)
           .single();
+        console.log('DataLayer.ensureProfileLoaded: Database query result:', { data, error });
 
         if (error) {
           if (error.code === 'PGRST116') {
@@ -134,8 +137,10 @@ export class DataLayer {
 
   // Public method to load all profile data at once
   static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string }> => {
+    console.log('DataLayer.loadAllProfileData: Starting to load profile data');
     await DataLayer.ensureProfileLoaded();
     const profile = DataLayer.getCachedProfileData();
+    console.log('DataLayer.loadAllProfileData: Returning profile data:', profile);
     return { sortMode: profile.sortMode as 'chronological' | 'unreadOnTop', accentColor: profile.accentColor };
   };
 
