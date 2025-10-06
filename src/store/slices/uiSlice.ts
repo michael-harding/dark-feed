@@ -7,7 +7,17 @@ interface UIState {
   sortMode: 'chronological' | 'unreadOnTop';
   accentColor: string;
   initialLoading: boolean;
+  mobileActionbarPadding: boolean;
 }
+
+const getInitialMobileActionbarPadding = (): boolean => {
+  try {
+    const stored = localStorage.getItem('mobileActionbarPadding');
+    return stored ? JSON.parse(stored) : true;
+  } catch {
+    return true;
+  }
+};
 
 const initialState: UIState = {
   selectedFeed: null,
@@ -15,6 +25,7 @@ const initialState: UIState = {
   sortMode: 'chronological',
   accentColor: '46 87% 65%',
   initialLoading: true,
+  mobileActionbarPadding: getInitialMobileActionbarPadding(),
 };
 
 // Async thunk to load user settings
@@ -51,12 +62,17 @@ const uiSlice = createSlice({
     setInitialLoading: (state, action: PayloadAction<boolean>) => {
       state.initialLoading = action.payload;
     },
+    setMobileActionbarPadding: (state, action: PayloadAction<boolean>) => {
+      state.mobileActionbarPadding = action.payload;
+      localStorage.setItem('mobileActionbarPadding', JSON.stringify(action.payload));
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(loadUserSettings.fulfilled, (state, action) => {
         state.sortMode = action.payload.sortMode;
         state.accentColor = action.payload.accentColor;
+        // mobileActionbarPadding is handled locally via localStorage
       });
   },
 });
@@ -68,6 +84,7 @@ export const {
   setSortMode,
   setAccentColor,
   setInitialLoading,
+  setMobileActionbarPadding,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

@@ -560,6 +560,7 @@ export class DataLayer {
     }
   };
 
+
   static createDefaultSettings = async (): Promise<void> => {
     try {
       const { data: user } = await DataLayer.getCachedUser();

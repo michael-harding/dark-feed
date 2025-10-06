@@ -1,13 +1,14 @@
 import { useState, useRef } from 'react';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
-import { setAccentColor } from '@/store/slices/uiSlice';
+import { setAccentColor, setMobileActionbarPadding } from '@/store/slices/uiSlice';
 import { useAuth } from '@/hooks/useAuth';
 import { Feed } from '@/services/dataLayer';
 
@@ -37,7 +38,7 @@ export const MobileFeedSidebar = ({
   isLoading = false
 }: MobileFeedSidebarProps) => {
   const dispatch = useAppDispatch();
-  const { accentColor } = useAppSelector((state) => state.ui);
+  const { accentColor, mobileActionbarPadding } = useAppSelector((state) => state.ui);
   const { user, profile, signOut } = useAuth();
   const [showAddFeed, setShowAddFeed] = useState(false);
   const [newFeedUrl, setNewFeedUrl] = useState('');
@@ -149,7 +150,7 @@ export const MobileFeedSidebar = ({
   return (
     <div className="h-screen bg-sidebar-bg flex flex-col">
       {/* Header */}
-      <div className="p-4 border-b border-sidebar-border pt-10">
+      <div className={cn("p-4 border-b border-sidebar-border", mobileActionbarPadding && "pt-10")}>
         <div className="flex items-center gap-3 mb-4">
           <div className="relative">
             <div className="w-10 h-10 bg-gradient-to-br from-accent to-accent/80 rounded-xl flex items-center justify-center shadow-lg">
@@ -281,6 +282,23 @@ export const MobileFeedSidebar = ({
                         )}
                       </button>
                     ))}
+                  </div>
+                </div>
+
+                {/* Mobile Actionbar Padding Section */}
+                <div>
+                  <h3 className="text-sm font-medium text-foreground mb-2 flex items-center gap-2">
+                    <Smartphone className="w-4 h-4" />
+                    Mobile Actionbar Padding
+                  </h3>
+                  <div className="flex items-center justify-between p-3 border rounded-lg bg-muted/30">
+                    <div className="text-sm text-muted-foreground">
+                      Add extra padding to mobile action bars
+                    </div>
+                    <Switch
+                      checked={mobileActionbarPadding}
+                      onCheckedChange={(checked) => dispatch(setMobileActionbarPadding(checked))}
+                    />
                   </div>
                 </div>
               </div>
