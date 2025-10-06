@@ -158,9 +158,9 @@ const articlesSlice = createSlice({
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
           state.articles.push(...newArticles);
-          // Save to database async - create a plain copy
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.saveArticles(plainArticles);
+          // Save only the new articles to avoid re-inserting deleted ones
+          const plainNew: Article[] = JSON.parse(JSON.stringify(newArticles));
+          DataLayer.saveArticles(plainNew);
         }
       })
       .addCase(refreshFeed.fulfilled, (state, action) => {
@@ -174,9 +174,9 @@ const articlesSlice = createSlice({
           // Note: cleanup is now handled directly in the refreshFeed thunk
           // using the new cleanupArticlesByEarliestDate method
 
-          // Save to database async - create a plain copy
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.saveArticles(plainArticles);
+          // Save only the new articles to avoid re-inserting deleted ones
+          const plainNew: Article[] = JSON.parse(JSON.stringify(newArticles));
+          DataLayer.saveArticles(plainNew);
         }
       })
       .addCase(importFeeds.fulfilled, (state, action) => {
@@ -194,9 +194,9 @@ const articlesSlice = createSlice({
             newArticle => !state.articles.some(existingArticle => existingArticle.url === newArticle.url)
           );
           state.articles.push(...filteredNewArticles);
-          // Save to database async - create a plain copy
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.saveArticles(plainArticles);
+          // Save only the newly added articles to avoid re-inserting deleted ones
+          const plainNew: Article[] = JSON.parse(JSON.stringify(filteredNewArticles));
+          DataLayer.saveArticles(plainNew);
         }
       })
       .addCase(refreshAllFeeds.fulfilled, (state, action) => {
@@ -218,9 +218,9 @@ const articlesSlice = createSlice({
           // Note: cleanup is now handled directly in the refreshAllFeeds thunk
           // using the new cleanupArticlesByEarliestDate method
 
-          // Save to database async - create a plain copy
-          const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-          DataLayer.saveArticles(plainArticles);
+          // Save only the newly added articles to avoid re-inserting deleted ones
+          const plainNew: Article[] = JSON.parse(JSON.stringify(filteredNewArticles));
+          DataLayer.saveArticles(plainNew);
         }
       });
   },
