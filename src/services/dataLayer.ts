@@ -724,46 +724,6 @@ export class DataLayer {
 
       console.log(`Found ${matchCount} articles matching deletion criteria`);
 
-      // DIAGNOSTIC: Get a sample article ID to test deletion
-      const { data: sampleArticles, error: selectError } = await supabase
-        .from('articles')
-        .select('id')
-        .eq('user_id', user.user.id)
-        .eq('feed_id', feedId)
-        .lt('published_at', earliestDate.toISOString())
-        .eq('is_read', true)
-        .eq('is_starred', false)
-        .eq('is_bookmarked', false)
-        .limit(1);
-
-      console.log('DIAGNOSTIC - Sample article for deletion:', sampleArticles);
-      console.log('DIAGNOSTIC - Select error:', selectError);
-
-      if (sampleArticles && sampleArticles.length > 0) {
-        // Try deleting just this one article with full error reporting
-        const testId = sampleArticles[0].id;
-        console.log(`DIAGNOSTIC - Attempting to delete article ${testId}`);
-        
-        const { data: deletedData, error: deleteError, status, statusText } = await supabase
-          .from('articles')
-          .delete()
-          .eq('id', testId)
-          .select();
-
-        console.log('DIAGNOSTIC - Delete response status:', status, statusText);
-        console.log('DIAGNOSTIC - Delete response data:', deletedData);
-        console.log('DIAGNOSTIC - Delete error:', deleteError);
-
-        // Verify if it was actually deleted
-        const { data: verifyData, error: verifyError } = await supabase
-          .from('articles')
-          .select('id')
-          .eq('id', testId);
-
-        console.log('DIAGNOSTIC - Article still exists after delete?', verifyData);
-        console.log('DIAGNOSTIC - Verify error:', verifyError);
-      }
-
       // Delete all articles for this feed that are older than the earliest article date
       // BUT preserve articles that are unread, starred, or bookmarked
       const { error, count } = await supabase
