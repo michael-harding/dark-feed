@@ -5,19 +5,35 @@ interface FeedsState {
   feeds: Feed[];
   isLoading: boolean;
   error: string | null;
+  sessionCache: {
+    feedsLoaded: boolean;
+    feedsLoadedAt: number | null;
+  };
 }
 
 const initialState: FeedsState = {
   feeds: [],
   isLoading: false,
   error: null,
+  sessionCache: {
+    feedsLoaded: false,
+    feedsLoadedAt: null,
+  },
 };
 
 // Async thunk to load feeds
 export const loadFeeds = createAsyncThunk(
   'feeds/loadFeeds',
-  async () => {
-    return await DataLayer.loadFeeds();
+  async (_, { getState }) => {
+    const state = getState() as { feeds: FeedsState };
+
+    // Check if feeds were already loaded in this session
+    if (state.feeds.sessionCache.feedsLoaded && state.feeds.feeds.length > 0) {
+      return state.feeds.feeds;
+    }
+
+    const feeds = await DataLayer.loadFeeds();
+    return feeds;
   }
 );
 
@@ -238,6 +254,18 @@ const feedsSlice = createSlice({
         DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
+    clearSessionCache: (state) => {
+      state.sessionCache = {
+        feedsLoaded: false,
+        feedsLoadedAt: null,
+      };
+    },
+    setSessionCacheLoaded: (state) => {
+      state.sessionCache = {
+        feedsLoaded: true,
+        feedsLoadedAt: Date.now(),
+      };
+    },
   },
   extraReducers: (builder) => {
     builder
@@ -249,6 +277,11 @@ const feedsSlice = createSlice({
       .addCase(loadFeeds.fulfilled, (state, action) => {
         state.feeds = action.payload;
         state.isLoading = false;
+        // Mark feeds as loaded in session cache
+        state.sessionCache = {
+          feedsLoaded: true,
+          feedsLoadedAt: Date.now(),
+        };
       })
       .addCase(loadFeeds.rejected, (state, action) => {
         state.isLoading = false;
@@ -317,6 +350,8 @@ export const {
   setFeedUnreadCount,
   updateFeedUnreadCount,
   markAllAsRead,
+  clearSessionCache,
+  setSessionCacheLoaded,
 } = feedsSlice.actions;
 
 export default feedsSlice.reducer;

@@ -18,6 +18,7 @@ import {
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
+  clearSessionCache,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -51,11 +52,11 @@ const Mobile = () => {
   // Get current view from URL path
   const getCurrentView = useCallback((): MobileView => {
     const pathSegments = window.location.pathname.split('/').filter(Boolean);
-    // Handle both /m and /m/feed/123/article/456 patterns
+    // Handle mobile routes: /m, /m/feed/{id}, /m/feed/{id}/article/{id}
     if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
-      if (pathSegments.length >= 4 && pathSegments[3] === 'article') {
+      if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
         return 'reader';
-      } else if (pathSegments.length >= 3 && pathSegments[2] !== '') {
+      } else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
         return 'articles';
       }
     }
@@ -98,18 +99,33 @@ const Mobile = () => {
 
         const pathSegments = window.location.pathname.split('/').filter(Boolean);
         if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
-          const feedId = pathSegments[2];
-          const articleId = pathSegments[4];
+          // Handle /m/feed/{feedId}/article/{articleId}
+          if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
+            const feedId = pathSegments[2];
+            const articleId = pathSegments[4];
 
-          if (feedId && feedId !== 'feed' && feedId !== 'article') {
-            dispatch(selectFeed(feedId));
-          } else {
-            dispatch(selectFeed(null));
+            if (feedId && feedId !== 'feed' && feedId !== 'article') {
+              dispatch(selectFeed(feedId));
+            }
+
+            if (articleId) {
+              dispatch(selectArticle(articleId));
+            }
           }
+          // Handle /m/feed/{feedId}
+          else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
+            const feedId = pathSegments[2];
 
-          if (articleId) {
-            dispatch(selectArticle(articleId));
-          } else {
+            if (feedId && feedId !== 'feed' && feedId !== 'article') {
+              dispatch(selectFeed(feedId));
+            } else {
+              dispatch(selectFeed(null));
+            }
+            dispatch(selectArticle(null));
+          }
+          // Handle /m (feeds view)
+          else {
+            dispatch(selectFeed(null));
             dispatch(selectArticle(null));
           }
         } else {
@@ -130,16 +146,28 @@ const Mobile = () => {
 
     const pathSegments = window.location.pathname.split('/').filter(Boolean);
     if (pathSegments.length >= 1 && pathSegments[0] === 'm') {
-      const feedId = pathSegments[2];
-      const articleId = pathSegments[4];
+      // Handle /m/feed/{feedId}/article/{articleId}
+      if (pathSegments.length >= 4 && pathSegments[1] === 'feed' && pathSegments[3] === 'article') {
+        const feedId = pathSegments[2];
+        const articleId = pathSegments[4];
 
-      if (feedId && feedId !== 'feed' && feedId !== 'article') {
-        dispatch(selectFeed(feedId));
-      }
+        if (feedId && feedId !== 'feed' && feedId !== 'article') {
+          dispatch(selectFeed(feedId));
+        }
 
-      if (articleId) {
-        dispatch(selectArticle(articleId));
+        if (articleId) {
+          dispatch(selectArticle(articleId));
+        }
       }
+      // Handle /m/feed/{feedId}
+      else if (pathSegments.length >= 3 && pathSegments[1] === 'feed') {
+        const feedId = pathSegments[2];
+
+        if (feedId && feedId !== 'feed' && feedId !== 'article') {
+          dispatch(selectFeed(feedId));
+        }
+      }
+      // Handle /m (feeds view) - no feed or article selection needed
     }
   }, [dispatch, getCurrentView]);
 
@@ -151,7 +179,7 @@ const Mobile = () => {
   }, [user, authLoading, navigate]);
 
   // Redux state
-  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
+  const { feeds, isLoading, sessionCache } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
   const {
     selectedFeed,
@@ -209,7 +237,7 @@ const Mobile = () => {
 
   // Load feeds when sidebar is shown
   useEffect(() => {
-    if (currentView === 'feeds' && feeds.length === 0) {
+    if (currentView === 'feeds' && feeds.length === 0 && !sessionCache.feedsLoaded) {
       const loadFeedsForSidebar = async () => {
         try {
           await dispatch(loadFeeds()).unwrap();
@@ -225,15 +253,15 @@ const Mobile = () => {
 
       loadFeedsForSidebar();
     }
-  }, [currentView, dispatch, feeds.length, toast]);
+  }, [currentView, dispatch, feeds.length, sessionCache.feedsLoaded, toast]);
 
   // Load feeds and articles when a feed is selected
   useEffect(() => {
     if (selectedFeed && currentView === 'articles') {
       const loadFeedData = async () => {
         try {
-          // Load feeds if not already loaded
-          if (feeds.length === 0) {
+          // Load feeds if not already loaded in this session
+          if (feeds.length === 0 && !sessionCache.feedsLoaded) {
             await dispatch(loadFeeds()).unwrap();
           }
 
@@ -254,7 +282,7 @@ const Mobile = () => {
 
       loadFeedData();
     }
-  }, [selectedFeed, currentView, dispatch, feeds.length, sortMode, toast]);
+  }, [selectedFeed, currentView, dispatch, feeds.length, sessionCache.feedsLoaded, sortMode, toast]);
 
   // Initialize app on page load
   useEffect(() => {
@@ -387,8 +415,9 @@ const Mobile = () => {
     dispatch(removeArticlesByFeed(feedId));
 
     if (selectedFeed === feedId) {
-      dispatch(selectFeed('all'));
-      updateURL('articles', 'all');
+      dispatch(selectFeed(null));
+      dispatch(selectArticle(null));
+      updateURL('feeds');
     }
 
     toast({
@@ -426,6 +455,24 @@ const Mobile = () => {
     });
   };
 
+  const handleRefreshFeeds = async () => {
+    try {
+      // Clear session cache to force fresh data load
+      dispatch(clearSessionCache());
+      await dispatch(refreshAllFeeds(feeds)).unwrap();
+      toast({
+        title: "Feeds Refreshed",
+        description: "All feeds have been updated with the latest content.",
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh Error",
+        description: "Failed to refresh feeds. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleToggleSortMode = () => {
     dispatch(toggleSortMode());
   };
@@ -447,12 +494,13 @@ const Mobile = () => {
   const handleBackToFeeds = () => {
     dispatch(selectFeed(null));
     dispatch(selectArticle(null));
-    updateURL('feeds');
+    updateURL('feeds', undefined, undefined);
   };
 
   const handleBackToArticles = () => {
     dispatch(selectArticle(null));
-    updateURL('articles', selectedFeed);
+    // Keep the selectedFeed when going back to articles
+    updateURL('articles', selectedFeed, undefined);
   };
 
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
@@ -498,6 +546,7 @@ const Mobile = () => {
           onRenameFeed={handleRenameFeed}
           onMarkAllAsRead={handleMarkAllAsRead}
           onReorderFeeds={handleReorderFeeds}
+          onRefreshFeeds={handleRefreshFeeds}
           isLoading={isLoading && feeds.length === 0}
         />
       )}
