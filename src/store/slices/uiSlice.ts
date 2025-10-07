@@ -9,7 +9,7 @@ interface UIState {
   initialLoading: boolean;
   mobileActionbarPadding: boolean;
   refreshLimitInterval: number; // in minutes, 0 means no limit
-  feedFetchTime: number | null; // timestamp when feeds were last fetched
+  feedFetchTime: string | null; // ISO date string when feeds were last fetched
 }
 
 const getInitialMobileActionbarPadding = (): boolean => {
@@ -46,7 +46,7 @@ export const updateFeedFetchTime = createAsyncThunk(
   'ui/updateFeedFetchTime',
   async (_, { getState }) => {
     const state = getState() as { ui: UIState };
-    const newFetchTime = Date.now();
+    const newFetchTime = new Date().toISOString();
 
     // Save to database
     await DataLayer.saveFeedFetchTime(newFetchTime);
@@ -73,7 +73,8 @@ export const checkFeedFetchStatus = createAsyncThunk(
     }
 
     const now = Date.now();
-    const timeSinceLastFetch = now - feedFetchTime;
+    const lastFetchTime = feedFetchTime ? new Date(feedFetchTime).getTime() : 0;
+    const timeSinceLastFetch = now - lastFetchTime;
     const refreshLimitMs = refreshLimitInterval * 60 * 1000;
 
     const shouldFetch = timeSinceLastFetch >= refreshLimitMs;
@@ -120,7 +121,7 @@ const uiSlice = createSlice({
       state.refreshLimitInterval = action.payload;
       DataLayer.saveRefreshLimitInterval(action.payload);
     },
-    setFeedFetchTime: (state, action: PayloadAction<number | null>) => {
+    setFeedFetchTime: (state, action: PayloadAction<string | null>) => {
       state.feedFetchTime = action.payload;
     },
   },

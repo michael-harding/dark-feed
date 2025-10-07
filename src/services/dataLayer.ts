@@ -7,7 +7,6 @@ export interface Feed {
   url: string;
   unreadCount: number;
   category?: string;
-  fetchTime?: string;
 }
 
 export interface Article {
@@ -37,7 +36,7 @@ export class DataLayer {
     sortMode: string;
     accentColor: string;
     refreshLimitInterval: number;
-    feedFetchTime: number | null;
+    feedFetchTime: string | null;
     timestamp: number
   } | null = null;
   private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
@@ -115,14 +114,14 @@ export class DataLayer {
           sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
           accentColor: data?.accent_color || '46 87% 65%',
           refreshLimitInterval: data?.refresh_limit_interval || 0,
-          feedFetchTime: data?.feed_fetch_time ? new Date(data.feed_fetch_time).getTime() : null
+          feedFetchTime: data?.feed_fetch_time ? new Date(data.feed_fetch_time + (data.feed_fetch_time.includes('Z') ? '' : 'Z')).toISOString().split('T')[0] : null
         };
 
         DataLayer.profileCache = { ...profileData, timestamp: now };
         return profileData;
       } catch (error) {
         console.error('Error loading profile:', error);
-        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null as string | null };
         DataLayer.profileCache = { ...defaultData, timestamp: now };
         return defaultData;
       } finally {
@@ -141,18 +140,19 @@ export class DataLayer {
   };
 
   // Public method to load all profile data at once
-  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number; feedFetchTime: number | null }> => {
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number; feedFetchTime: string | null }> => {
     await DataLayer.ensureProfileLoaded();
     const profile = DataLayer.getCachedProfileData();
+    const profileData = DataLayer.getCachedProfileData();
     return {
-      sortMode: profile.sortMode as 'chronological' | 'unreadOnTop',
-      accentColor: profile.accentColor,
-      refreshLimitInterval: profile.refreshLimitInterval || 0,
-      feedFetchTime: profile.feedFetchTime || null
+      sortMode: profileData.sortMode as 'chronological' | 'unreadOnTop',
+      accentColor: profileData.accentColor,
+      refreshLimitInterval: profileData.refreshLimitInterval || 0,
+      feedFetchTime: profileData.feedFetchTime || null
     };
   };
 
-  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number; feedFetchTime?: number | null }) => {
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number; feedFetchTime?: string | null }) => {
     if (DataLayer.profileCache) {
       if (updates.sortMode !== undefined) {
         DataLayer.profileCache.sortMode = updates.sortMode;
@@ -275,8 +275,7 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category,
-        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
+        category: feed.category
       }));
     } catch (error) {
       console.error('Error loading feeds:', error);
@@ -302,7 +301,7 @@ export class DataLayer {
       if (!user.user) return;
 
       // If no specific fields are specified, update all fields (backward compatibility)
-      const fields = fieldsToUpdate || ['id', 'title', 'url', 'unreadCount', 'category', 'fetchTime'];
+      const fields = fieldsToUpdate || ['id', 'title', 'url', 'unreadCount', 'category'];
 
       // Build the update object with only the specified fields
       const updateData: any = {
@@ -315,7 +314,6 @@ export class DataLayer {
       // if (fields.includes('title')) updateData.title = feed.title;
       if (fields.includes('unreadCount')) updateData.unread_count = feed.unreadCount;
       if (fields.includes('category')) updateData.category = feed.category;
-      if (fields.includes('fetchTime')) updateData.fetch_time = feed.fetchTime;
 
       const { error } = await supabase
         .from('feeds')
@@ -376,8 +374,7 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category,
-        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
+        category: feed.category
       };
     } catch (error) {
       console.error('Error getting feed by URL:', error);
@@ -616,7 +613,7 @@ export class DataLayer {
     }
   };
 
-  static saveFeedFetchTime = async (fetchTime: number): Promise<void> => {
+  static saveFeedFetchTime = async (fetchTime: string): Promise<void> => {
     try {
       const { data: user } = await DataLayer.getCachedUser();
       if (!user.user) return;
@@ -674,25 +671,12 @@ export class DataLayer {
   // RSS fetching
   static fetchRSSFeed = async (url: string, refreshLimitMinutes: number = 0): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     const feed = await DataLayer.getFeedByUrl(url);
-    const now = Date.now();
-
-    // Check if we should skip based on refresh limit interval
-    if (feed && feed.fetchTime && refreshLimitMinutes > 0) {
-      const lastFetch = new Date(feed.fetchTime).getTime();
-      const refreshLimitMs = refreshLimitMinutes * 60 * 1000;
-
-      if (now - lastFetch < refreshLimitMs) {
-        console.log(`RSS feed for ${url} was fetched less than ${refreshLimitMinutes} minutes ago (limit: ${refreshLimitMinutes} minutes)`);
-        return {
-          status: 'skipped',
-          feed: { title: 'Feed (skipped)' },
-          items: []
-        };
-      }
-    }
 
     try {
-      const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      // Get the global feed fetch time from user settings for the date filter
+      await DataLayer.ensureProfileLoaded();
+      const profileData = DataLayer.getCachedProfileData();
+      const feedTimeFilter = profileData.feedFetchTime ? `&date=${profileData.feedFetchTime.split('T')[0]}` : '';
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
@@ -715,15 +699,6 @@ export class DataLayer {
         feed: { title: feedTitle },
         items: data.items || []
       };
-
-      // Update fetch time in database after successful fetch
-      if (feed) {
-        const updatedFeed: Feed = {
-          ...feed,
-          fetchTime: new Date().toISOString()
-        };
-        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
-      }
 
       return transformedData;
     } catch (error) {

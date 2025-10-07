@@ -18,7 +18,7 @@ const initialState: FeedsState = {
 export const loadFeeds = createAsyncThunk(
   'feeds/loadFeeds',
   async (_, { getState, dispatch }) => {
-    const state = getState() as { ui: { refreshLimitInterval: number; feedFetchTime: number | null } };
+    const state = getState() as { ui: { refreshLimitInterval: number; feedFetchTime: string | null } };
 
     // Check if feeds should be fetched based on user settings
     const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
@@ -57,11 +57,10 @@ export const addFeed = createAsyncThunk(
         title: data.feed?.title || 'Unknown Feed',
         url: url,
         unreadCount: data.items?.length || 0,
-        category: null,
-        fetchTime: null
+        category: null
       };
 
-      await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
+      await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category']);
 
       const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -102,11 +101,10 @@ export const importFeeds = createAsyncThunk(
             title: data.feed?.title || feed.title || 'Unknown Feed',
             url: feed.url,
             unreadCount: data.items?.length || 0,
-            category: feed.category,
-            fetchTime: null
+            category: feed.category
           };
 
-          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
+          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category']);
 
           const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
           const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -157,12 +155,12 @@ export const refreshFeed = createAsyncThunk(
       // Clean up old articles for this feed based on the earliest article date
       await DataLayer.cleanupArticlesByEarliestDate(feedId, newArticles);
 
-      // Update the feed's fetch time
+      // Update the feed's unread count after successful refresh
       const updatedFeed: Feed = {
         ...feed,
-        fetchTime: new Date().toISOString()
+        unreadCount: feed.unreadCount + newArticles.length
       };
-      await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
+      await DataLayer.saveFeed(updatedFeed, ['unreadCount']);
 
       return { feedId, articles: newArticles };
     } catch (error) {
@@ -192,12 +190,12 @@ export const refreshAllFeeds = createAsyncThunk(
         // Clean up old articles for this feed based on the earliest article date
         await DataLayer.cleanupArticlesByEarliestDate(feed.id, feedArticles);
 
-        // Update the feed's fetch time
+        // Update the feed's unread count after successful refresh
         const updatedFeed: Feed = {
           ...feed,
-          fetchTime: new Date().toISOString()
+          unreadCount: feed.unreadCount + feedArticles.length
         };
-        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
+        await DataLayer.saveFeed(updatedFeed, ['unreadCount']);
 
         results.push({ newArticles: feedArticles, feed: updatedFeed });
       } catch (error) {
