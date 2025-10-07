@@ -1,38 +1,39 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { DataLayer, Feed, Article } from '@/services/dataLayer';
+import { checkFeedFetchStatus, updateFeedFetchTime } from '@/store/slices/uiSlice';
 
 interface FeedsState {
   feeds: Feed[];
   isLoading: boolean;
   error: string | null;
-  sessionCache: {
-    feedsLoaded: boolean;
-    feedsLoadedAt: number | null;
-  };
 }
 
 const initialState: FeedsState = {
   feeds: [],
   isLoading: false,
   error: null,
-  sessionCache: {
-    feedsLoaded: false,
-    feedsLoadedAt: null,
-  },
 };
 
-// Async thunk to load feeds
+// Async thunk to load feeds with centralized fetch time check
 export const loadFeeds = createAsyncThunk(
   'feeds/loadFeeds',
-  async (_, { getState }) => {
-    const state = getState() as { feeds: FeedsState };
+  async (_, { getState, dispatch }) => {
+    const state = getState() as { ui: { refreshLimitInterval: number; feedFetchTime: string | null } };
 
-    // Check if feeds were already loaded in this session
-    if (state.feeds.sessionCache.feedsLoaded && state.feeds.feeds.length > 0) {
-      return state.feeds.feeds;
+    // Check if feeds should be fetched based on user settings
+    const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
+
+    if (!fetchStatus.shouldFetch) {
+      // Still load feeds from database to get current state
+      const feeds = await DataLayer.loadFeeds();
+      return feeds;
     }
 
     const feeds = await DataLayer.loadFeeds();
+
+    // Update fetch time after successful load
+    await dispatch(updateFeedFetchTime());
+
     return feeds;
   }
 );
@@ -42,7 +43,8 @@ export const addFeed = createAsyncThunk(
   'feeds/addFeed',
   async (url: string) => {
     try {
-      const data = await DataLayer.fetchRSSFeed(url);
+      // New feeds should always fetch immediately, ignoring refresh limit
+      const data = await DataLayer.fetchRSSFeed(url, 0);
 
       if (data.status === 'skipped') {
         throw new Error('Feed fetching skipped on development server');
@@ -54,11 +56,10 @@ export const addFeed = createAsyncThunk(
         title: data.feed?.title || 'Unknown Feed',
         url: url,
         unreadCount: data.items?.length || 0,
-        category: null,
-        fetchTime: null
+        category: null
       };
 
-      await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
+      await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category']);
 
       const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
       const newArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -74,7 +75,7 @@ export const addFeed = createAsyncThunk(
 // Async thunk to import multiple feeds
 export const importFeeds = createAsyncThunk(
   'feeds/importFeeds',
-  async (feedsToImport: Feed[]) => {
+  async (feedsToImport: Feed[], { getState }) => {
     const currentFeeds = await DataLayer.loadFeeds();
     const existingUrls = new Set(currentFeeds.map(feed => feed.url));
 
@@ -83,7 +84,8 @@ export const importFeeds = createAsyncThunk(
     for (const feed of feedsToImport) {
       if (!existingUrls.has(feed.url)) {
         try {
-          const data = await DataLayer.fetchRSSFeed(feed.url);
+          // Import should always fetch immediately, ignoring refresh limit
+          const data = await DataLayer.fetchRSSFeed(feed.url, 0);
 
           if (data.status === 'skipped') {
             results.push({ articles: [], feed, error: 'Feed fetching skipped on development server' });
@@ -98,11 +100,10 @@ export const importFeeds = createAsyncThunk(
             title: data.feed?.title || feed.title || 'Unknown Feed',
             url: feed.url,
             unreadCount: data.items?.length || 0,
-            category: feed.category,
-            fetchTime: null
+            category: feed.category
           };
 
-          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category', 'fetchTime']);
+          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category']);
 
           const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
           const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
@@ -129,7 +130,7 @@ export const importFeeds = createAsyncThunk(
 // Async thunk to refresh a single feed
 export const refreshFeed = createAsyncThunk(
   'feeds/refreshFeed',
-  async (feedId: string) => {
+  async (feedId: string, { getState }) => {
     const feeds = await DataLayer.loadFeeds();
     const feed = feeds.find(f => f.id === feedId);
 
@@ -138,7 +139,9 @@ export const refreshFeed = createAsyncThunk(
     }
 
     try {
-      const data = await DataLayer.fetchRSSFeed(feed.url);
+      const state = getState() as { ui: { refreshLimitInterval: number } };
+      const refreshLimitInterval = state.ui.refreshLimitInterval;
+      const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
 
       if (data.status === 'skipped') {
         return { feedId, articles: [], skipped: true };
@@ -151,12 +154,12 @@ export const refreshFeed = createAsyncThunk(
       // Clean up old articles for this feed based on the earliest article date
       await DataLayer.cleanupArticlesByEarliestDate(feedId, newArticles);
 
-      // Update the feed's fetch time
+      // Update the feed's unread count after successful refresh
       const updatedFeed: Feed = {
         ...feed,
-        fetchTime: new Date().toISOString()
+        unreadCount: feed.unreadCount + newArticles.length
       };
-      await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
+      await DataLayer.saveFeed(updatedFeed, ['unreadCount']);
 
       return { feedId, articles: newArticles };
     } catch (error) {
@@ -168,12 +171,14 @@ export const refreshFeed = createAsyncThunk(
 // Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async (feeds: Feed[]) => {
+  async ({ feeds, forceRefresh = false }: { feeds: Feed[]; forceRefresh?: boolean }, { getState }) => {
     const results: Array<{ newArticles: Article[]; feed: Feed; error?: string }> = [];
 
     for (const feed of feeds) {
       try {
-        const data = await DataLayer.fetchRSSFeed(feed.url);
+        const state = getState() as { ui: { refreshLimitInterval: number } };
+        const refreshLimitInterval = forceRefresh ? 0 : state.ui.refreshLimitInterval;
+        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
 
         if (data.status === 'skipped') {
           results.push({ newArticles: [], feed });
@@ -184,12 +189,12 @@ export const refreshAllFeeds = createAsyncThunk(
         // Clean up old articles for this feed based on the earliest article date
         await DataLayer.cleanupArticlesByEarliestDate(feed.id, feedArticles);
 
-        // Update the feed's fetch time
+        // Update the feed's unread count after successful refresh
         const updatedFeed: Feed = {
           ...feed,
-          fetchTime: new Date().toISOString()
+          unreadCount: feed.unreadCount + feedArticles.length
         };
-        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
+        await DataLayer.saveFeed(updatedFeed, ['unreadCount']);
 
         results.push({ newArticles: feedArticles, feed: updatedFeed });
       } catch (error) {
@@ -254,18 +259,6 @@ const feedsSlice = createSlice({
         DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
-    clearSessionCache: (state) => {
-      state.sessionCache = {
-        feedsLoaded: false,
-        feedsLoadedAt: null,
-      };
-    },
-    setSessionCacheLoaded: (state) => {
-      state.sessionCache = {
-        feedsLoaded: true,
-        feedsLoadedAt: Date.now(),
-      };
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -277,11 +270,6 @@ const feedsSlice = createSlice({
       .addCase(loadFeeds.fulfilled, (state, action) => {
         state.feeds = action.payload;
         state.isLoading = false;
-        // Mark feeds as loaded in session cache
-        state.sessionCache = {
-          feedsLoaded: true,
-          feedsLoadedAt: Date.now(),
-        };
       })
       .addCase(loadFeeds.rejected, (state, action) => {
         state.isLoading = false;
@@ -350,8 +338,6 @@ export const {
   setFeedUnreadCount,
   updateFeedUnreadCount,
   markAllAsRead,
-  clearSessionCache,
-  setSessionCacheLoaded,
 } = feedsSlice.actions;
 
 export default feedsSlice.reducer;

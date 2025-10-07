@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check, CheckCheck, LogOut, User } from 'lucide-react';
+import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, X, Palette, GripVertical, MoreVertical, Edit, Check, CheckCheck, LogOut, User, RefreshCw } from 'lucide-react';
 import {
   DndContext,
   closestCenter,
@@ -42,6 +42,7 @@ interface FeedSidebarProps {
   onRenameFeed: (feedId: string, newTitle: string) => void;
   onMarkAllAsRead: (feedId: string) => void;
   onReorderFeeds: (reorderedFeeds: Feed[]) => void;
+  onRefreshFeeds?: () => void;
   isLoading?: boolean;
 }
 
@@ -171,7 +172,7 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
   );
 };
 
-export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, isLoading = false }: FeedSidebarProps) => {
+export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onImportFeeds, onRemoveFeed, onRenameFeed, onMarkAllAsRead, onReorderFeeds, onRefreshFeeds, isLoading = false }: FeedSidebarProps) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { accentColor } = useAppSelector((state) => state.ui);
@@ -414,15 +415,29 @@ export const FeedSidebar = ({ feeds, selectedFeed, onFeedSelect, onAddFeed, onIm
 
       {/* Footer */}
       <div className="p-4 border-t border-sidebar-border">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start"
-          onClick={() => navigate('/settings')}
-        >
-          <Settings className="w-4 h-4 mr-2" />
-          Settings
-        </Button>
+        <div className="flex gap-2">
+          {onRefreshFeeds && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="flex-1 justify-start"
+              onClick={onRefreshFeeds}
+              disabled={isLoading}
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          )}
+          <Button
+            variant="ghost"
+            size="sm"
+            className={onRefreshFeeds ? "flex-1 justify-start" : "w-full justify-start"}
+            onClick={() => navigate('/settings')}
+          >
+            <Settings className="w-4 h-4 mr-2" />
+            Settings
+          </Button>
+        </div>
 
         {/* Hidden file input for import */}
         <input

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';
@@ -24,7 +25,6 @@ import {
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
-  clearSessionCache,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -37,13 +37,14 @@ import {
   updateFilteredArticles,
 } from '@/store/slices/articlesSlice';
 import {
-  selectFeed,
-  selectArticle,
-  toggleSortMode,
-  loadUserSettings,
-  setAccentColor,
-  setInitialLoading,
-} from '@/store/slices/uiSlice';
+   selectFeed,
+   selectArticle,
+   toggleSortMode,
+   loadUserSettings,
+   setAccentColor,
+   setInitialLoading,
+   setRefreshLimitInterval,
+ } from '@/store/slices/uiSlice';
 import { useToast } from '@/hooks/use-toast';
 import {
   DndContext,
@@ -212,9 +213,9 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
     }
   }, [isMobile, propIsMobile]);
 
-  const { accentColor, mobileActionbarPadding, initialLoading } = useAppSelector((state) => state.ui);
+  const { accentColor, mobileActionbarPadding, initialLoading, refreshLimitInterval } = useAppSelector((state) => state.ui);
   const { user, profile, signOut, loading: authLoading } = useAuth();
-  const { feeds, isLoading, sessionCache } = useAppSelector((state) => state.feeds);
+  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
   const { selectedFeed, selectedArticle, sortMode } = useAppSelector((state) => state.ui);
 
@@ -224,16 +225,9 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
   // Load user settings when component mounts and user is authenticated
   useEffect(() => {
-    console.log('Settings component: user =', user);
-    console.log('Settings component: authLoading =', authLoading);
-    console.log('Settings component: initialLoading =', initialLoading);
     if (user && !authLoading) {
-      console.log('Loading user settings for:', user.email);
       dispatch(loadUserSettings());
-    } else if (authLoading) {
-      console.log('Settings component: Auth still loading');
     } else if (!user) {
-      console.log('Settings component: User not authenticated, redirecting to auth');
       // If user is not authenticated, redirect to auth page
       navigate('/auth');
     }
@@ -241,10 +235,10 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
   // Load feeds when component mounts and user is authenticated
   useEffect(() => {
-    if (user && !sessionCache.feedsLoaded) {
+    if (user) {
       dispatch(loadFeeds());
     }
-  }, [user, sessionCache.feedsLoaded, dispatch]);
+  }, [user, dispatch]);
 
   // Update CSS variables when accent color changes (from database or user selection)
   useEffect(() => {
@@ -271,6 +265,28 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
     { name: 'Orange', value: '25 95% 53%', hex: '#f97316' },
     { name: 'Red', value: '0 84% 60%', hex: '#ef4444' },
     { name: 'Teal', value: '173 80% 40%', hex: '#14b8a6' },
+  ];
+
+  // Refresh limit interval options
+  const refreshLimitOptions = [
+    { value: 0, label: 'No limit' },
+    // Half hour increments up to 3 hours (30, 60, 90, 120, 150, 180 minutes)
+    { value: 30, label: '30 minutes' },
+    { value: 60, label: '1 hour' },
+    { value: 90, label: '1.5 hours' },
+    { value: 120, label: '2 hours' },
+    { value: 150, label: '2.5 hours' },
+    { value: 180, label: '3 hours' },
+    // 1 hour increments up to 6 hours (240, 300, 360 minutes)
+    { value: 240, label: '4 hours' },
+    { value: 300, label: '5 hours' },
+    { value: 360, label: '6 hours' },
+    // 3 hour increments up to 24 hours (480, 720, 960, 1200, 1440 minutes)
+    { value: 480, label: '8 hours' },
+    { value: 720, label: '12 hours' },
+    { value: 960, label: '16 hours' },
+    { value: 1200, label: '20 hours' },
+    { value: 1440, label: '24 hours' },
   ];
 
   // Update CSS variables when accent color changes
@@ -313,6 +329,11 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
     // Update favicon to match new accent color
     faviconGenerator.generateAndUpdateFavicon(color);
+  };
+
+  const handleRefreshLimitChange = (value: string) => {
+    const interval = parseInt(value);
+    dispatch(setRefreshLimitInterval(interval));
   };
 
   const handleAddFeed = async () => {
@@ -679,6 +700,34 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
                 </div>
               </button>
             ))}
+          </div>
+        </div>
+
+        {/* Refresh Limit Interval Section */}
+        <div>
+          <h3 className="text-sm font-medium text-foreground mb-3 flex items-center gap-2">
+            <Rss className="w-4 h-4" />
+            Feed Refresh Settings
+          </h3>
+          <div className="space-y-3 p-4 border rounded-lg bg-muted/30">
+            <div className="text-sm">
+              <label className="text-sm font-medium text-foreground">Refresh Limit Interval</label>
+              <p className="text-xs text-muted-foreground mt-1">
+                Minimum time between RSS feed refreshes. Set to "No limit" to refresh on every request.
+              </p>
+            </div>
+            <Select value={refreshLimitInterval.toString()} onValueChange={handleRefreshLimitChange}>
+              <SelectTrigger className="bg-background">
+                <SelectValue placeholder="Select refresh interval" />
+              </SelectTrigger>
+              <SelectContent>
+                {refreshLimitOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value.toString()}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
 

@@ -7,7 +7,6 @@ export interface Feed {
   url: string;
   unreadCount: number;
   category?: string;
-  fetchTime?: string;
 }
 
 export interface Article {
@@ -33,7 +32,13 @@ export class DataLayer {
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   // Profile/settings cache to reduce duplicate profile requests
-  private static profileCache: { sortMode: string; accentColor: string; timestamp: number } | null = null;
+  private static profileCache: {
+    sortMode: string;
+    accentColor: string;
+    refreshLimitInterval: number;
+    feedFetchTime: string | null;
+    timestamp: number
+  } | null = null;
   private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
 
   // User profile cache for profiles table
@@ -67,7 +72,6 @@ export class DataLayer {
 
     // Return cached profile if still valid
     if (DataLayer.profileCache && (now - DataLayer.profileCache.timestamp) < DataLayer.CACHE_TTL) {
-      console.log('DataLayer.ensureProfileLoaded: Using cached profile data');
       return DataLayer.profileCache;
     }
 
@@ -81,43 +85,43 @@ export class DataLayer {
       try {
         const { data: user } = await DataLayer.getCachedUser();
         if (!user.user) {
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
 
-        console.log('DataLayer.ensureProfileLoaded: Querying database for user settings');
         const { data, error } = await supabase
           .from('user_settings')
-          .select('sort_mode, accent_color')
+          .select('sort_mode, accent_color, refresh_limit_interval, feed_fetch_time')
           .eq('user_id', user.user.id)
           .single();
-        console.log('DataLayer.ensureProfileLoaded: Database query result:', { data, error });
 
         if (error) {
           if (error.code === 'PGRST116') {
             // No settings exist, create default settings
             await DataLayer.createDefaultSettings();
-            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
             DataLayer.profileCache = { ...defaultData, timestamp: now };
             return defaultData;
           }
           console.error('Error loading profile:', error);
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
 
         const profileData = {
           sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
-          accentColor: data?.accent_color || '46 87% 65%'
+          accentColor: data?.accent_color || '46 87% 65%',
+          refreshLimitInterval: data?.refresh_limit_interval || 0,
+          feedFetchTime: data?.feed_fetch_time ? new Date(data.feed_fetch_time + (data.feed_fetch_time.includes('Z') ? '' : 'Z')).toISOString().split('T')[0] : null
         };
 
         DataLayer.profileCache = { ...profileData, timestamp: now };
         return profileData;
       } catch (error) {
         console.error('Error loading profile:', error);
-        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null as string | null };
         DataLayer.profileCache = { ...defaultData, timestamp: now };
         return defaultData;
       } finally {
@@ -136,21 +140,31 @@ export class DataLayer {
   };
 
   // Public method to load all profile data at once
-  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string }> => {
-    console.log('DataLayer.loadAllProfileData: Starting to load profile data');
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number; feedFetchTime: string | null }> => {
     await DataLayer.ensureProfileLoaded();
     const profile = DataLayer.getCachedProfileData();
-    console.log('DataLayer.loadAllProfileData: Returning profile data:', profile);
-    return { sortMode: profile.sortMode as 'chronological' | 'unreadOnTop', accentColor: profile.accentColor };
+    const profileData = DataLayer.getCachedProfileData();
+    return {
+      sortMode: profileData.sortMode as 'chronological' | 'unreadOnTop',
+      accentColor: profileData.accentColor,
+      refreshLimitInterval: profileData.refreshLimitInterval || 0,
+      feedFetchTime: profileData.feedFetchTime || null
+    };
   };
 
-  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string }) => {
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number; feedFetchTime?: string | null }) => {
     if (DataLayer.profileCache) {
       if (updates.sortMode !== undefined) {
         DataLayer.profileCache.sortMode = updates.sortMode;
       }
       if (updates.accentColor !== undefined) {
         DataLayer.profileCache.accentColor = updates.accentColor;
+      }
+      if (updates.refreshLimitInterval !== undefined) {
+        DataLayer.profileCache.refreshLimitInterval = updates.refreshLimitInterval;
+      }
+      if (updates.feedFetchTime !== undefined) {
+        DataLayer.profileCache.feedFetchTime = updates.feedFetchTime;
       }
       DataLayer.profileCache.timestamp = Date.now();
     }
@@ -261,8 +275,7 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category,
-        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
+        category: feed.category
       }));
     } catch (error) {
       console.error('Error loading feeds:', error);
@@ -288,7 +301,7 @@ export class DataLayer {
       if (!user.user) return;
 
       // If no specific fields are specified, update all fields (backward compatibility)
-      const fields = fieldsToUpdate || ['id', 'title', 'url', 'unreadCount', 'category', 'fetchTime'];
+      const fields = fieldsToUpdate || ['id', 'title', 'url', 'unreadCount', 'category'];
 
       // Build the update object with only the specified fields
       const updateData: any = {
@@ -301,7 +314,6 @@ export class DataLayer {
       // if (fields.includes('title')) updateData.title = feed.title;
       if (fields.includes('unreadCount')) updateData.unread_count = feed.unreadCount;
       if (fields.includes('category')) updateData.category = feed.category;
-      if (fields.includes('fetchTime')) updateData.fetch_time = feed.fetchTime;
 
       const { error } = await supabase
         .from('feeds')
@@ -362,8 +374,7 @@ export class DataLayer {
         title: feed.title,
         url: feed.url,
         unreadCount: feed.unread_count,
-        category: feed.category,
-        fetchTime: feed.fetch_time ? feed.fetch_time + 'Z' : feed.fetch_time
+        category: feed.category
       };
     } catch (error) {
       console.error('Error getting feed by URL:', error);
@@ -565,6 +576,69 @@ export class DataLayer {
     }
   };
 
+  static loadRefreshLimitInterval = async (): Promise<number> => {
+    try {
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.refreshLimitInterval;
+    } catch (error) {
+      console.error('Error loading refresh limit interval:', error);
+      return 0;
+    }
+  };
+
+  static saveRefreshLimitInterval = async (interval: number): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            refresh_limit_interval: interval
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving refresh limit interval:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ refreshLimitInterval: interval });
+      }
+    } catch (error) {
+      console.error('Error saving refresh limit interval:', error);
+    }
+  };
+
+  static saveFeedFetchTime = async (fetchTime: string): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            feed_fetch_time: new Date(fetchTime).toISOString()
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving feed fetch time:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ feedFetchTime: fetchTime });
+      }
+    } catch (error) {
+      console.error('Error saving feed fetch time:', error);
+    }
+  };
+
 
   static createDefaultSettings = async (): Promise<void> => {
     try {
@@ -577,7 +651,8 @@ export class DataLayer {
           {
             user_id: user.user.id,
             sort_mode: 'chronological',
-            accent_color: '46 87% 65%'
+            accent_color: '46 87% 65%',
+            refresh_limit_interval: 0
           },
           { onConflict: 'user_id' }
         );
@@ -586,7 +661,7 @@ export class DataLayer {
         console.error('Error creating default settings:', error);
       } else {
         // Update cache with default values
-        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%' });
+        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null });
       }
     } catch (error) {
       console.error('Error creating default settings:', error);
@@ -594,27 +669,14 @@ export class DataLayer {
   };
 
   // RSS fetching
-  static fetchRSSFeed = async (url: string): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
-    // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
+  static fetchRSSFeed = async (url: string, refreshLimitMinutes: number = 0): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     const feed = await DataLayer.getFeedByUrl(url);
-    const now = Date.now();
-    const threeMinutes = 0 * 60 * 1000;
-
-    if (feed && feed.fetchTime) {
-      const lastFetch = new Date(feed.fetchTime).getTime();
-
-      if (now - lastFetch < threeMinutes) {
-        console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
-        return {
-          status: 'skipped',
-          feed: { title: 'Feed (skipped)' },
-          items: []
-        };
-      }
-    }
 
     try {
-      const feedTimeFilter = feed?.fetchTime ? `&date=${feed.fetchTime.split('T')[0]}` : '';
+      // Get the global feed fetch time from user settings for the date filter
+      await DataLayer.ensureProfileLoaded();
+      const profileData = DataLayer.getCachedProfileData();
+      const feedTimeFilter = profileData.feedFetchTime ? `&date=${profileData.feedFetchTime.split('T')[0]}` : '';
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
@@ -637,15 +699,6 @@ export class DataLayer {
         feed: { title: feedTitle },
         items: data.items || []
       };
-
-      // Update fetch time in database after successful fetch
-      if (feed) {
-        const updatedFeed: Feed = {
-          ...feed,
-          fetchTime: new Date().toISOString()
-        };
-        await DataLayer.saveFeed(updatedFeed, ['fetchTime']);
-      }
 
       return transformedData;
     } catch (error) {
