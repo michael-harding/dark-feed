@@ -30,13 +30,14 @@ import {
   updateFilteredArticles,
 } from '@/store/slices/articlesSlice';
 import {
-  selectFeed,
-  selectArticle,
-  toggleSortMode,
-  loadUserSettings,
-  setAccentColor,
-  setInitialLoading,
-} from '@/store/slices/uiSlice';
+   selectFeed,
+   selectArticle,
+   toggleSortMode,
+   loadUserSettings,
+   setAccentColor,
+   setInitialLoading,
+   checkFeedFetchStatus,
+ } from '@/store/slices/uiSlice';
 import { Feed } from '@/services/dataLayer';
 
 type MobileView = 'feeds' | 'articles' | 'reader';
@@ -266,41 +267,91 @@ const Mobile = () => {
     }
   }, [currentView, dispatch, feeds.length, toast]);
 
-  // Load feeds and articles when a feed is selected
-  useEffect(() => {
-    if (selectedFeed && currentView === 'articles') {
-      const loadFeedData = async () => {
-        try {
-          // Load feeds if not already loaded
-          if (feeds.length === 0) {
-            await dispatch(loadFeeds()).unwrap();
-          }
 
-          // Load articles for the selected feed
-          await dispatch(loadArticles()).unwrap();
-
-          // Update filtered articles for the selected feed
-          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-        } catch (error) {
-          console.error('Error loading feed data:', error);
-          toast({
-            title: 'Error Loading Feed',
-            description: 'Failed to load feed data. Please try again.',
-            variant: 'destructive',
-          });
-        }
-      };
-
-      loadFeedData();
-    }
-  }, [selectedFeed, currentView, dispatch, feeds.length, sortMode, toast]);
-
-  // Initialize app on page load
+  // Initialize app with centralized fetch time check
   useEffect(() => {
     const initializeApp = async () => {
       try {
+        // Step 1: Load user settings first
         await dispatch(loadUserSettings()).unwrap();
-        dispatch(setInitialLoading(false));
+
+        // Step 2: Check if feeds should be fetched based on user settings
+        const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
+
+        // Step 3: Load feeds and articles from database
+        await dispatch(loadFeeds()).unwrap();
+        await dispatch(loadArticles()).unwrap();
+
+        // Step 4: Get the updated feeds and articles after loading
+        const currentFeeds = await dispatch(loadFeeds()).unwrap();
+        const currentArticles = await dispatch(loadArticles()).unwrap();
+
+        if (currentFeeds.length === 0) {
+          dispatch(setInitialLoading(false));
+          return;
+        }
+
+        // Step 5: Only refresh feeds if the check indicates they should be fetched
+        if (fetchStatus.shouldFetch) {
+          // Collect all current article URLs per feed before refresh
+          const allCurrentUrlsByFeed = new Map<string, Set<string>>();
+          currentFeeds.forEach(feed => {
+            const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
+            const urls = new Set<string>(feedArticles.map(a => a.url));
+            allCurrentUrlsByFeed.set(feed.id, urls);
+          });
+
+          // Refresh all feeds
+          const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
+
+          // After refresh, collect updated URLs (existing + new)
+          const updatedFeedArticleUrls = new Set<string>();
+          result.forEach(({ newArticles, feed, error }) => {
+            if (error) {
+              console.error(`Failed to refresh feed ${feed.title}:`, error);
+              toast({
+                title: 'Feed Refresh Error',
+                description: `${feed.title}: ${error}`,
+                variant: 'destructive',
+              });
+            } else {
+              // Add all current URLs for this feed (from before) plus new ones
+              const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
+              newArticles.forEach(article => {
+                if (article.url) {
+                  currentUrls.add(article.url);
+                }
+              });
+              currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
+            }
+          });
+
+          // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+
+          // Final verification of all unread counts after cleanup using fresh articles
+          const refreshedArticles = await dispatch(loadArticles()).unwrap();
+          currentFeeds.forEach(feed => {
+            const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
+            const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
+
+            if (actualUnreadCount !== feed.unreadCount) {
+              dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+            }
+          });
+
+          // Update filtered articles after refresh (to include new ones)
+          dispatch(updateFilteredArticles({ selectedFeed: "all", sortMode }));
+
+          toast({
+            title: "Feeds Refreshed",
+            description: "Checked for new articles",
+          });
+        } else {
+          console.log('Feeds within refresh limit, skipping refresh');
+          // Still update filtered articles to ensure proper display
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+        }
       } catch (error) {
         console.error('Error initializing app:', error);
         toast({
@@ -308,12 +359,13 @@ const Mobile = () => {
           description: String(error),
           variant: 'destructive',
         });
+      } finally {
         dispatch(setInitialLoading(false));
       }
     };
 
     initializeApp();
-  }, []);
+  }, []); // Only run on initial page load
 
   // Handle view changes based on selections
   useEffect(() => {
