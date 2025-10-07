@@ -191,7 +191,6 @@ const Index = () => {
             description: "Checked for new articles",
           });
         } else {
-          console.log('Feeds within refresh limit, skipping refresh');
           // Still update filtered articles to ensure proper display
           dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
         }

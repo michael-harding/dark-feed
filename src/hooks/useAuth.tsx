@@ -62,7 +62,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
       async (event, session) => {
         // Handle token expiration errors
         if (event === 'TOKEN_REFRESHED' && !session) {
-          console.log('Token expired, clearing local storage');
           await supabase.auth.signOut({ scope: 'local' });
           localStorage.removeItem('supabase.auth.token');
           setSession(null);
@@ -91,7 +90,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
         // Handle JWT expiration errors during session retrieval
         if (error && error.message?.includes('token is expired')) {
-          console.log('Session token expired, clearing local storage');
           await supabase.auth.signOut({ scope: 'local' });
           localStorage.removeItem('supabase.auth.token');
           setSession(null);
@@ -154,7 +152,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
 
       // Handle JWT expiration errors during sign in
       if (error && error.message?.includes('token is expired')) {
-        console.log('Sign in token expired, clearing local storage');
         await supabase.auth.signOut({ scope: 'local' });
         localStorage.removeItem('supabase.auth.token');
 
@@ -179,7 +176,6 @@ export const AuthProvider = ({ children }: AuthProviderProps) => {
   };
 
   const clearExpiredToken = async () => {
-    console.log('Manually clearing expired token');
     await supabase.auth.signOut({ scope: 'local' });
     localStorage.removeItem('supabase.auth.token');
     setSession(null);

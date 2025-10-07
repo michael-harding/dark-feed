@@ -24,7 +24,6 @@ export const loadFeeds = createAsyncThunk(
     const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
 
     if (!fetchStatus.shouldFetch) {
-      console.log('Feeds within refresh limit, skipping fetch');
       // Still load feeds from database to get current state
       const feeds = await DataLayer.loadFeeds();
       return feeds;
