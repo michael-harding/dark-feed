@@ -302,7 +302,7 @@ const Mobile = () => {
           });
 
           // Refresh all feeds
-          const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
+          const result = await dispatch(refreshAllFeeds({ feeds: currentFeeds })).unwrap();
 
           // After refresh, collect updated URLs (existing + new)
           const updatedFeedArticleUrls = new Set<string>();
@@ -539,8 +539,8 @@ const Mobile = () => {
 
   const handleRefreshFeeds = async () => {
     try {
-      // Refresh all feeds - the new logic will handle fetch time checking automatically
-      await dispatch(refreshAllFeeds(feeds)).unwrap();
+      // Force refresh all feeds, bypassing time limits
+      await dispatch(refreshAllFeeds({ feeds, forceRefresh: true })).unwrap();
       toast({
         title: "Feeds Refreshed",
         description: "All feeds have been updated with the latest content.",

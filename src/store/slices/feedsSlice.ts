@@ -175,13 +175,13 @@ export const refreshFeed = createAsyncThunk(
 // Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async (feeds: Feed[], { getState }) => {
+  async ({ feeds, forceRefresh = false }: { feeds: Feed[]; forceRefresh?: boolean }, { getState }) => {
     const results: Array<{ newArticles: Article[]; feed: Feed; error?: string }> = [];
 
     for (const feed of feeds) {
       try {
         const state = getState() as { ui: { refreshLimitInterval: number } };
-        const refreshLimitInterval = state.ui.refreshLimitInterval;
+        const refreshLimitInterval = forceRefresh ? 0 : state.ui.refreshLimitInterval;
         const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
 
         if (data.status === 'skipped') {

@@ -145,7 +145,7 @@ const Index = () => {
           });
 
           // Refresh all feeds
-          const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
+          const result = await dispatch(refreshAllFeeds({ feeds: currentFeeds })).unwrap();
 
           // After refresh, collect updated URLs (existing + new)
           const updatedFeedArticleUrls = new Set<string>();
@@ -357,6 +357,23 @@ const Index = () => {
     dispatch(toggleSortMode());
   };
 
+  const handleRefreshFeeds = async () => {
+    try {
+      // Force refresh all feeds, bypassing time limits
+      await dispatch(refreshAllFeeds({ feeds, forceRefresh: true })).unwrap();
+      toast({
+        title: "Feeds Refreshed",
+        description: "All feeds have been updated with the latest content.",
+      });
+    } catch (error) {
+      toast({
+        title: "Refresh Error",
+        description: "Failed to refresh feeds. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const selectedArticleData = articles.find(a => a.id === selectedArticle);
 
   // Show loading while authenticating
@@ -406,6 +423,7 @@ const Index = () => {
         onRenameFeed={handleRenameFeed}
         onMarkAllAsRead={handleMarkAllAsRead}
         onReorderFeeds={handleReorderFeeds}
+        onRefreshFeeds={handleRefreshFeeds}
         isLoading={isLoading}
       />
 
