@@ -36,10 +36,7 @@ const initialState: UIState = {
 export const loadUserSettings = createAsyncThunk(
   'ui/loadUserSettings',
   async (_, { dispatch }) => {
-    console.log('loadUserSettings: Async thunk dispatched');
-    console.log('loadUserSettings: Fetching profile data from database');
     const data = await DataLayer.loadAllProfileData();
-    console.log('loadUserSettings: Loaded data:', data);
     return data;
   }
 );

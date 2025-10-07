@@ -225,16 +225,9 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
   // Load user settings when component mounts and user is authenticated
   useEffect(() => {
-    console.log('Settings component: user =', user);
-    console.log('Settings component: authLoading =', authLoading);
-    console.log('Settings component: initialLoading =', initialLoading);
     if (user && !authLoading) {
-      console.log('Loading user settings for:', user.email);
       dispatch(loadUserSettings());
-    } else if (authLoading) {
-      console.log('Settings component: Auth still loading');
     } else if (!user) {
-      console.log('Settings component: User not authenticated, redirecting to auth');
       // If user is not authenticated, redirect to auth page
       navigate('/auth');
     }

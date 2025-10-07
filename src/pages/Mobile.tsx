@@ -85,12 +85,6 @@ const Mobile = () => {
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      console.log('PopState triggered:', {
-        state: event.state,
-        currentURL: window.location.pathname,
-        historyLength: window.history.length
-      });
-
       const state = event.state;
       if (state && state.view) {
         setCurrentView(state.view);

@@ -30,7 +30,6 @@ export const loadFeeds = createAsyncThunk(
       return feeds;
     }
 
-    console.log('Fetching fresh feeds');
     const feeds = await DataLayer.loadFeeds();
 
     // Update fetch time after successful load
