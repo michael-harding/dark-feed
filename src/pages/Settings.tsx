@@ -25,7 +25,6 @@ import {
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
-  clearSessionCache,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -216,7 +215,7 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
   const { accentColor, mobileActionbarPadding, initialLoading, refreshLimitInterval } = useAppSelector((state) => state.ui);
   const { user, profile, signOut, loading: authLoading } = useAuth();
-  const { feeds, isLoading, sessionCache } = useAppSelector((state) => state.feeds);
+  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
   const { selectedFeed, selectedArticle, sortMode } = useAppSelector((state) => state.ui);
 
@@ -243,10 +242,10 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
 
   // Load feeds when component mounts and user is authenticated
   useEffect(() => {
-    if (user && !sessionCache.feedsLoaded) {
+    if (user) {
       dispatch(loadFeeds());
     }
-  }, [user, sessionCache.feedsLoaded, dispatch]);
+  }, [user, dispatch]);
 
   // Update CSS variables when accent color changes (from database or user selection)
   useEffect(() => {

@@ -18,7 +18,6 @@ import {
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
-  clearSessionCache,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -191,7 +190,7 @@ const Mobile = () => {
   }, [user, authLoading, navigate]);
 
   // Redux state
-  const { feeds, isLoading, sessionCache } = useAppSelector((state) => state.feeds);
+  const { feeds, isLoading } = useAppSelector((state) => state.feeds);
   const { articles, filteredArticles } = useAppSelector((state) => state.articles);
   const {
     selectedFeed,
@@ -249,7 +248,7 @@ const Mobile = () => {
 
   // Load feeds when sidebar is shown
   useEffect(() => {
-    if (currentView === 'feeds' && feeds.length === 0 && !sessionCache.feedsLoaded) {
+    if (currentView === 'feeds' && feeds.length === 0) {
       const loadFeedsForSidebar = async () => {
         try {
           await dispatch(loadFeeds()).unwrap();
@@ -265,15 +264,15 @@ const Mobile = () => {
 
       loadFeedsForSidebar();
     }
-  }, [currentView, dispatch, feeds.length, sessionCache.feedsLoaded, toast]);
+  }, [currentView, dispatch, feeds.length, toast]);
 
   // Load feeds and articles when a feed is selected
   useEffect(() => {
     if (selectedFeed && currentView === 'articles') {
       const loadFeedData = async () => {
         try {
-          // Load feeds if not already loaded in this session
-          if (feeds.length === 0 && !sessionCache.feedsLoaded) {
+          // Load feeds if not already loaded
+          if (feeds.length === 0) {
             await dispatch(loadFeeds()).unwrap();
           }
 
@@ -294,7 +293,7 @@ const Mobile = () => {
 
       loadFeedData();
     }
-  }, [selectedFeed, currentView, dispatch, feeds.length, sessionCache.feedsLoaded, sortMode, toast]);
+  }, [selectedFeed, currentView, dispatch, feeds.length, sortMode, toast]);
 
   // Initialize app on page load
   useEffect(() => {
@@ -488,8 +487,7 @@ const Mobile = () => {
 
   const handleRefreshFeeds = async () => {
     try {
-      // Clear session cache to force fresh data load
-      dispatch(clearSessionCache());
+      // Refresh all feeds - the new logic will handle fetch time checking automatically
       await dispatch(refreshAllFeeds(feeds)).unwrap();
       toast({
         title: "Feeds Refreshed",

@@ -33,7 +33,13 @@ export class DataLayer {
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   // Profile/settings cache to reduce duplicate profile requests
-  private static profileCache: { sortMode: string; accentColor: string; refreshLimitInterval: number; timestamp: number } | null = null;
+  private static profileCache: {
+    sortMode: string;
+    accentColor: string;
+    refreshLimitInterval: number;
+    feedFetchTime: number | null;
+    timestamp: number
+  } | null = null;
   private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
 
   // User profile cache for profiles table
@@ -81,7 +87,7 @@ export class DataLayer {
       try {
         const { data: user } = await DataLayer.getCachedUser();
         if (!user.user) {
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
@@ -89,7 +95,7 @@ export class DataLayer {
         console.log('DataLayer.ensureProfileLoaded: Querying database for user settings');
         const { data, error } = await supabase
           .from('user_settings')
-          .select('sort_mode, accent_color, refresh_limit_interval')
+          .select('sort_mode, accent_color, refresh_limit_interval, feed_fetch_time')
           .eq('user_id', user.user.id)
           .single();
         console.log('DataLayer.ensureProfileLoaded: Database query result:', { data, error });
@@ -98,12 +104,12 @@ export class DataLayer {
           if (error.code === 'PGRST116') {
             // No settings exist, create default settings
             await DataLayer.createDefaultSettings();
-            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
+            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
             DataLayer.profileCache = { ...defaultData, timestamp: now };
             return defaultData;
           }
           console.error('Error loading profile:', error);
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
@@ -111,14 +117,15 @@ export class DataLayer {
         const profileData = {
           sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
           accentColor: data?.accent_color || '46 87% 65%',
-          refreshLimitInterval: data?.refresh_limit_interval || 0
+          refreshLimitInterval: data?.refresh_limit_interval || 0,
+          feedFetchTime: data?.feed_fetch_time ? new Date(data.feed_fetch_time).getTime() : null
         };
 
         DataLayer.profileCache = { ...profileData, timestamp: now };
         return profileData;
       } catch (error) {
         console.error('Error loading profile:', error);
-        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null };
         DataLayer.profileCache = { ...defaultData, timestamp: now };
         return defaultData;
       } finally {
@@ -137,7 +144,7 @@ export class DataLayer {
   };
 
   // Public method to load all profile data at once
-  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number }> => {
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number; feedFetchTime: number | null }> => {
     console.log('DataLayer.loadAllProfileData: Starting to load profile data');
     await DataLayer.ensureProfileLoaded();
     const profile = DataLayer.getCachedProfileData();
@@ -145,11 +152,12 @@ export class DataLayer {
     return {
       sortMode: profile.sortMode as 'chronological' | 'unreadOnTop',
       accentColor: profile.accentColor,
-      refreshLimitInterval: profile.refreshLimitInterval || 0
+      refreshLimitInterval: profile.refreshLimitInterval || 0,
+      feedFetchTime: profile.feedFetchTime || null
     };
   };
 
-  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number }) => {
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number; feedFetchTime?: number | null }) => {
     if (DataLayer.profileCache) {
       if (updates.sortMode !== undefined) {
         DataLayer.profileCache.sortMode = updates.sortMode;
@@ -159,6 +167,9 @@ export class DataLayer {
       }
       if (updates.refreshLimitInterval !== undefined) {
         DataLayer.profileCache.refreshLimitInterval = updates.refreshLimitInterval;
+      }
+      if (updates.feedFetchTime !== undefined) {
+        DataLayer.profileCache.feedFetchTime = updates.feedFetchTime;
       }
       DataLayer.profileCache.timestamp = Date.now();
     }
@@ -610,6 +621,32 @@ export class DataLayer {
     }
   };
 
+  static saveFeedFetchTime = async (fetchTime: number): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            feed_fetch_time: new Date(fetchTime).toISOString()
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving feed fetch time:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ feedFetchTime: fetchTime });
+      }
+    } catch (error) {
+      console.error('Error saving feed fetch time:', error);
+    }
+  };
+
 
   static createDefaultSettings = async (): Promise<void> => {
     try {
@@ -632,7 +669,7 @@ export class DataLayer {
         console.error('Error creating default settings:', error);
       } else {
         // Update cache with default values
-        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 });
+        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0, feedFetchTime: null });
       }
     } catch (error) {
       console.error('Error creating default settings:', error);

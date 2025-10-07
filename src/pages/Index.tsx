@@ -36,6 +36,7 @@ import {
   loadUserSettings,
   setAccentColor,
   setInitialLoading,
+  checkFeedFetchStatus,
 } from '@/store/slices/uiSlice';
 import { Feed } from '@/services/dataLayer';
 import heroImage from '@/assets/rss-hero.jpg';
@@ -110,18 +111,21 @@ const Index = () => {
     dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
   }, [dispatch, selectedFeed, sortMode]);
 
-  // Clean up old read articles and refresh feeds on page load
+  // Initialize app with centralized fetch time check
   useEffect(() => {
     const initializeApp = async () => {
       try {
         // Step 1: Load user settings first
         await dispatch(loadUserSettings()).unwrap();
 
-        // Step 2: Load feeds and articles from database
+        // Step 2: Check if feeds should be fetched based on user settings
+        const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
+
+        // Step 3: Load feeds and articles from database
         await dispatch(loadFeeds()).unwrap();
         await dispatch(loadArticles()).unwrap();
 
-        // Step 3: Get the updated feeds and articles after loading
+        // Step 4: Get the updated feeds and articles after loading
         const currentFeeds = await dispatch(loadFeeds()).unwrap();
         const currentArticles = await dispatch(loadArticles()).unwrap();
 
@@ -130,64 +134,71 @@ const Index = () => {
           return;
         }
 
-        // Step 2: Collect all current article URLs per feed before refresh
-        const allCurrentUrlsByFeed = new Map<string, Set<string>>();
-        currentFeeds.forEach(feed => {
-          const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const urls = new Set<string>(feedArticles.map(a => a.url));
-          allCurrentUrlsByFeed.set(feed.id, urls);
-        });
+        // Step 5: Only refresh feeds if the check indicates they should be fetched
+        if (fetchStatus.shouldFetch) {
+          // Collect all current article URLs per feed before refresh
+          const allCurrentUrlsByFeed = new Map<string, Set<string>>();
+          currentFeeds.forEach(feed => {
+            const feedArticles = currentArticles.filter(a => a.feedId === feed.id);
+            const urls = new Set<string>(feedArticles.map(a => a.url));
+            allCurrentUrlsByFeed.set(feed.id, urls);
+          });
 
-        // Step 3: Refresh all feeds
-        const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
+          // Refresh all feeds
+          const result = await dispatch(refreshAllFeeds(currentFeeds)).unwrap();
 
-        // Step 4: After refresh, collect updated URLs (existing + new)
-        const updatedFeedArticleUrls = new Set<string>();
-        result.forEach(({ newArticles, feed, error }) => {
-          if (error) {
-            console.error(`Failed to refresh feed ${feed.title}:`, error);
-            toast({
-              title: 'Feed Refresh Error',
-              description: `${feed.title}: ${error}`,
-              variant: 'destructive',
-            });
-          } else {
-            // Add all current URLs for this feed (from before) plus new ones
-            const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
-            newArticles.forEach(article => {
-              if (article.url) {
-                currentUrls.add(article.url);
-              }
-            });
-            currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
-          }
-        });
+          // After refresh, collect updated URLs (existing + new)
+          const updatedFeedArticleUrls = new Set<string>();
+          result.forEach(({ newArticles, feed, error }) => {
+            if (error) {
+              console.error(`Failed to refresh feed ${feed.title}:`, error);
+              toast({
+                title: 'Feed Refresh Error',
+                description: `${feed.title}: ${error}`,
+                variant: 'destructive',
+              });
+            } else {
+              // Add all current URLs for this feed (from before) plus new ones
+              const currentUrls = allCurrentUrlsByFeed.get(feed.id) || new Set<string>();
+              newArticles.forEach(article => {
+                if (article.url) {
+                  currentUrls.add(article.url);
+                }
+              });
+              currentUrls.forEach(url => updatedFeedArticleUrls.add(url));
+            }
+          });
 
-        // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
-        dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+          // Note: cleanup is now handled automatically in the refreshAllFeeds thunk
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
 
-        // Step 6: Final verification of all unread counts after cleanup using fresh articles
-        const refreshedArticles = await dispatch(loadArticles()).unwrap();
-        currentFeeds.forEach(feed => {
-          const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
-          const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
+          // Final verification of all unread counts after cleanup using fresh articles
+          const refreshedArticles = await dispatch(loadArticles()).unwrap();
+          currentFeeds.forEach(feed => {
+            const feedArticles = refreshedArticles.filter(a => a.feedId === feed.id);
+            const actualUnreadCount = feedArticles.filter(a => !a.isRead).length;
 
-          if (actualUnreadCount !== feed.unreadCount) {
-            dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
-          }
-        });
+            if (actualUnreadCount !== feed.unreadCount) {
+              dispatch(setFeedUnreadCount({ feedId: feed.id, count: actualUnreadCount }));
+            }
+          });
 
-        // Step 7: Update filtered articles after refresh (to include new ones)
-        dispatch(updateFilteredArticles({ selectedFeed: "all", sortMode }));
+          // Update filtered articles after refresh (to include new ones)
+          dispatch(updateFilteredArticles({ selectedFeed: "all", sortMode }));
 
-        toast({
-          title: "Feeds Refreshed",
-          description: "Checked for new articles",
-        });
+          toast({
+            title: "Feeds Refreshed",
+            description: "Checked for new articles",
+          });
+        } else {
+          console.log('Feeds within refresh limit, skipping refresh');
+          // Still update filtered articles to ensure proper display
+          dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
+        }
       } catch (error) {
-        console.error('Error refreshing feeds:', error);
+        console.error('Error initializing app:', error);
         toast({
-          title: 'Feeds Refresh Error',
+          title: 'Initialization Error',
           description: String(error),
           variant: 'destructive',
         });

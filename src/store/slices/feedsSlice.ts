@@ -1,38 +1,41 @@
 import { createSlice, createAsyncThunk, PayloadAction } from '@reduxjs/toolkit';
 import { DataLayer, Feed, Article } from '@/services/dataLayer';
+import { checkFeedFetchStatus, updateFeedFetchTime } from '@/store/slices/uiSlice';
 
 interface FeedsState {
   feeds: Feed[];
   isLoading: boolean;
   error: string | null;
-  sessionCache: {
-    feedsLoaded: boolean;
-    feedsLoadedAt: number | null;
-  };
 }
 
 const initialState: FeedsState = {
   feeds: [],
   isLoading: false,
   error: null,
-  sessionCache: {
-    feedsLoaded: false,
-    feedsLoadedAt: null,
-  },
 };
 
-// Async thunk to load feeds
+// Async thunk to load feeds with centralized fetch time check
 export const loadFeeds = createAsyncThunk(
   'feeds/loadFeeds',
-  async (_, { getState }) => {
-    const state = getState() as { feeds: FeedsState };
+  async (_, { getState, dispatch }) => {
+    const state = getState() as { ui: { refreshLimitInterval: number; feedFetchTime: number | null } };
 
-    // Check if feeds were already loaded in this session
-    if (state.feeds.sessionCache.feedsLoaded && state.feeds.feeds.length > 0) {
-      return state.feeds.feeds;
+    // Check if feeds should be fetched based on user settings
+    const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
+
+    if (!fetchStatus.shouldFetch) {
+      console.log('Feeds within refresh limit, skipping fetch');
+      // Still load feeds from database to get current state
+      const feeds = await DataLayer.loadFeeds();
+      return feeds;
     }
 
+    console.log('Fetching fresh feeds');
     const feeds = await DataLayer.loadFeeds();
+
+    // Update fetch time after successful load
+    await dispatch(updateFeedFetchTime());
+
     return feeds;
   }
 );
@@ -260,18 +263,6 @@ const feedsSlice = createSlice({
         DataLayer.saveFeed(plainFeed, ['unreadCount']);
       }
     },
-    clearSessionCache: (state) => {
-      state.sessionCache = {
-        feedsLoaded: false,
-        feedsLoadedAt: null,
-      };
-    },
-    setSessionCacheLoaded: (state) => {
-      state.sessionCache = {
-        feedsLoaded: true,
-        feedsLoadedAt: Date.now(),
-      };
-    },
   },
   extraReducers: (builder) => {
     builder
@@ -283,11 +274,6 @@ const feedsSlice = createSlice({
       .addCase(loadFeeds.fulfilled, (state, action) => {
         state.feeds = action.payload;
         state.isLoading = false;
-        // Mark feeds as loaded in session cache
-        state.sessionCache = {
-          feedsLoaded: true,
-          feedsLoadedAt: Date.now(),
-        };
       })
       .addCase(loadFeeds.rejected, (state, action) => {
         state.isLoading = false;
@@ -356,8 +342,6 @@ export const {
   setFeedUnreadCount,
   updateFeedUnreadCount,
   markAllAsRead,
-  clearSessionCache,
-  setSessionCacheLoaded,
 } = feedsSlice.actions;
 
 export default feedsSlice.reducer;
