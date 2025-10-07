@@ -8,6 +8,7 @@ interface UIState {
   accentColor: string;
   initialLoading: boolean;
   mobileActionbarPadding: boolean;
+  refreshLimitInterval: number; // in minutes, 0 means no limit
 }
 
 const getInitialMobileActionbarPadding = (): boolean => {
@@ -26,6 +27,7 @@ const initialState: UIState = {
   accentColor: '46 87% 65%',
   initialLoading: true,
   mobileActionbarPadding: getInitialMobileActionbarPadding(),
+  refreshLimitInterval: 0, // Default to 0 (no limit)
 };
 
 // Async thunk to load user settings
@@ -70,12 +72,17 @@ const uiSlice = createSlice({
       state.mobileActionbarPadding = action.payload;
       localStorage.setItem('mobileActionbarPadding', JSON.stringify(action.payload));
     },
+    setRefreshLimitInterval: (state, action: PayloadAction<number>) => {
+      state.refreshLimitInterval = action.payload;
+      DataLayer.saveRefreshLimitInterval(action.payload);
+    },
   },
   extraReducers: (builder) => {
     builder
       .addCase(loadUserSettings.fulfilled, (state, action) => {
         state.sortMode = action.payload.sortMode;
         state.accentColor = action.payload.accentColor;
+        state.refreshLimitInterval = action.payload.refreshLimitInterval || 0;
         // mobileActionbarPadding is handled locally via localStorage
       });
   },
@@ -89,6 +96,7 @@ export const {
   setAccentColor,
   setInitialLoading,
   setMobileActionbarPadding,
+  setRefreshLimitInterval,
 } = uiSlice.actions;
 
 export default uiSlice.reducer;

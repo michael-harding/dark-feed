@@ -33,7 +33,7 @@ export class DataLayer {
   private static readonly CACHE_TTL = 5 * 60 * 1000; // 5 minutes in milliseconds
 
   // Profile/settings cache to reduce duplicate profile requests
-  private static profileCache: { sortMode: string; accentColor: string; timestamp: number } | null = null;
+  private static profileCache: { sortMode: string; accentColor: string; refreshLimitInterval: number; timestamp: number } | null = null;
   private static profilePromise: Promise<{ sortMode: string; accentColor: string }> | null = null;
 
   // User profile cache for profiles table
@@ -81,7 +81,7 @@ export class DataLayer {
       try {
         const { data: user } = await DataLayer.getCachedUser();
         if (!user.user) {
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
@@ -89,7 +89,7 @@ export class DataLayer {
         console.log('DataLayer.ensureProfileLoaded: Querying database for user settings');
         const { data, error } = await supabase
           .from('user_settings')
-          .select('sort_mode, accent_color')
+          .select('sort_mode, accent_color, refresh_limit_interval')
           .eq('user_id', user.user.id)
           .single();
         console.log('DataLayer.ensureProfileLoaded: Database query result:', { data, error });
@@ -98,26 +98,27 @@ export class DataLayer {
           if (error.code === 'PGRST116') {
             // No settings exist, create default settings
             await DataLayer.createDefaultSettings();
-            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+            const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
             DataLayer.profileCache = { ...defaultData, timestamp: now };
             return defaultData;
           }
           console.error('Error loading profile:', error);
-          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+          const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
           DataLayer.profileCache = { ...defaultData, timestamp: now };
           return defaultData;
         }
 
         const profileData = {
           sortMode: (data?.sort_mode as 'chronological' | 'unreadOnTop') || 'chronological',
-          accentColor: data?.accent_color || '46 87% 65%'
+          accentColor: data?.accent_color || '46 87% 65%',
+          refreshLimitInterval: data?.refresh_limit_interval || 0
         };
 
         DataLayer.profileCache = { ...profileData, timestamp: now };
         return profileData;
       } catch (error) {
         console.error('Error loading profile:', error);
-        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%' };
+        const defaultData = { sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 };
         DataLayer.profileCache = { ...defaultData, timestamp: now };
         return defaultData;
       } finally {
@@ -136,21 +137,28 @@ export class DataLayer {
   };
 
   // Public method to load all profile data at once
-  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string }> => {
+  static loadAllProfileData = async (): Promise<{ sortMode: 'chronological' | 'unreadOnTop'; accentColor: string; refreshLimitInterval: number }> => {
     console.log('DataLayer.loadAllProfileData: Starting to load profile data');
     await DataLayer.ensureProfileLoaded();
     const profile = DataLayer.getCachedProfileData();
     console.log('DataLayer.loadAllProfileData: Returning profile data:', profile);
-    return { sortMode: profile.sortMode as 'chronological' | 'unreadOnTop', accentColor: profile.accentColor };
+    return {
+      sortMode: profile.sortMode as 'chronological' | 'unreadOnTop',
+      accentColor: profile.accentColor,
+      refreshLimitInterval: profile.refreshLimitInterval || 0
+    };
   };
 
-  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string }) => {
+  private static updateCachedProfile = (updates: { sortMode?: string; accentColor?: string; refreshLimitInterval?: number }) => {
     if (DataLayer.profileCache) {
       if (updates.sortMode !== undefined) {
         DataLayer.profileCache.sortMode = updates.sortMode;
       }
       if (updates.accentColor !== undefined) {
         DataLayer.profileCache.accentColor = updates.accentColor;
+      }
+      if (updates.refreshLimitInterval !== undefined) {
+        DataLayer.profileCache.refreshLimitInterval = updates.refreshLimitInterval;
       }
       DataLayer.profileCache.timestamp = Date.now();
     }
@@ -565,6 +573,43 @@ export class DataLayer {
     }
   };
 
+  static loadRefreshLimitInterval = async (): Promise<number> => {
+    try {
+      await DataLayer.ensureProfileLoaded();
+      const profile = DataLayer.getCachedProfileData();
+      return profile.refreshLimitInterval;
+    } catch (error) {
+      console.error('Error loading refresh limit interval:', error);
+      return 0;
+    }
+  };
+
+  static saveRefreshLimitInterval = async (interval: number): Promise<void> => {
+    try {
+      const { data: user } = await DataLayer.getCachedUser();
+      if (!user.user) return;
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(
+          {
+            user_id: user.user.id,
+            refresh_limit_interval: interval
+          },
+          { onConflict: 'user_id' }
+        );
+
+      if (error) {
+        console.error('Error saving refresh limit interval:', error);
+      } else {
+        // Update cache immediately
+        DataLayer.updateCachedProfile({ refreshLimitInterval: interval });
+      }
+    } catch (error) {
+      console.error('Error saving refresh limit interval:', error);
+    }
+  };
+
 
   static createDefaultSettings = async (): Promise<void> => {
     try {
@@ -577,7 +622,8 @@ export class DataLayer {
           {
             user_id: user.user.id,
             sort_mode: 'chronological',
-            accent_color: '46 87% 65%'
+            accent_color: '46 87% 65%',
+            refresh_limit_interval: 0
           },
           { onConflict: 'user_id' }
         );
@@ -586,7 +632,7 @@ export class DataLayer {
         console.error('Error creating default settings:', error);
       } else {
         // Update cache with default values
-        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%' });
+        DataLayer.updateCachedProfile({ sortMode: 'chronological', accentColor: '46 87% 65%', refreshLimitInterval: 0 });
       }
     } catch (error) {
       console.error('Error creating default settings:', error);
@@ -594,17 +640,17 @@ export class DataLayer {
   };
 
   // RSS fetching
-  static fetchRSSFeed = async (url: string): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
-    // limit fetching to 3 minute intervals to limit data usage and prevent 429 errors
+  static fetchRSSFeed = async (url: string, refreshLimitMinutes: number = 0): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     const feed = await DataLayer.getFeedByUrl(url);
     const now = Date.now();
-    const threeMinutes = 0 * 60 * 1000;
 
-    if (feed && feed.fetchTime) {
+    // Check if we should skip based on refresh limit interval
+    if (feed && feed.fetchTime && refreshLimitMinutes > 0) {
       const lastFetch = new Date(feed.fetchTime).getTime();
+      const refreshLimitMs = refreshLimitMinutes * 60 * 1000;
 
-      if (now - lastFetch < threeMinutes) {
-        console.log(`RSS feed for ${url} was fetched less than 3 minutes ago`);
+      if (now - lastFetch < refreshLimitMs) {
+        console.log(`RSS feed for ${url} was fetched less than ${refreshLimitMinutes} minutes ago (limit: ${refreshLimitMinutes} minutes)`);
         return {
           status: 'skipped',
           feed: { title: 'Feed (skipped)' },

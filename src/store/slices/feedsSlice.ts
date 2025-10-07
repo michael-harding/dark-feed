@@ -42,7 +42,8 @@ export const addFeed = createAsyncThunk(
   'feeds/addFeed',
   async (url: string) => {
     try {
-      const data = await DataLayer.fetchRSSFeed(url);
+      // New feeds should always fetch immediately, ignoring refresh limit
+      const data = await DataLayer.fetchRSSFeed(url, 0);
 
       if (data.status === 'skipped') {
         throw new Error('Feed fetching skipped on development server');
@@ -74,7 +75,7 @@ export const addFeed = createAsyncThunk(
 // Async thunk to import multiple feeds
 export const importFeeds = createAsyncThunk(
   'feeds/importFeeds',
-  async (feedsToImport: Feed[]) => {
+  async (feedsToImport: Feed[], { getState }) => {
     const currentFeeds = await DataLayer.loadFeeds();
     const existingUrls = new Set(currentFeeds.map(feed => feed.url));
 
@@ -83,7 +84,8 @@ export const importFeeds = createAsyncThunk(
     for (const feed of feedsToImport) {
       if (!existingUrls.has(feed.url)) {
         try {
-          const data = await DataLayer.fetchRSSFeed(feed.url);
+          // Import should always fetch immediately, ignoring refresh limit
+          const data = await DataLayer.fetchRSSFeed(feed.url, 0);
 
           if (data.status === 'skipped') {
             results.push({ articles: [], feed, error: 'Feed fetching skipped on development server' });
@@ -129,7 +131,7 @@ export const importFeeds = createAsyncThunk(
 // Async thunk to refresh a single feed
 export const refreshFeed = createAsyncThunk(
   'feeds/refreshFeed',
-  async (feedId: string) => {
+  async (feedId: string, { getState }) => {
     const feeds = await DataLayer.loadFeeds();
     const feed = feeds.find(f => f.id === feedId);
 
@@ -138,7 +140,9 @@ export const refreshFeed = createAsyncThunk(
     }
 
     try {
-      const data = await DataLayer.fetchRSSFeed(feed.url);
+      const state = getState() as { ui: { refreshLimitInterval: number } };
+      const refreshLimitInterval = state.ui.refreshLimitInterval;
+      const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
 
       if (data.status === 'skipped') {
         return { feedId, articles: [], skipped: true };
@@ -168,12 +172,14 @@ export const refreshFeed = createAsyncThunk(
 // Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async (feeds: Feed[]) => {
+  async (feeds: Feed[], { getState }) => {
     const results: Array<{ newArticles: Article[]; feed: Feed; error?: string }> = [];
 
     for (const feed of feeds) {
       try {
-        const data = await DataLayer.fetchRSSFeed(feed.url);
+        const state = getState() as { ui: { refreshLimitInterval: number } };
+        const refreshLimitInterval = state.ui.refreshLimitInterval;
+        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
 
         if (data.status === 'skipped') {
           results.push({ newArticles: [], feed });
