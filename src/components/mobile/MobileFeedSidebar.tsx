@@ -1,10 +1,9 @@
 import { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Rss, Settings, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone, RefreshCw } from 'lucide-react';
+import { Rss, Settings, Bookmark, Star, Trash2, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { cn } from '@/lib/utils';
 import { faviconGenerator } from '@/utils/faviconGenerator';

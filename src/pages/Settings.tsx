@@ -1,10 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Rss, Settings as SettingsIcon, Bookmark, Star, Download, Upload, Trash2, Palette, LogOut, User, Smartphone, ArrowLeft, GripVertical, MoreVertical, Edit, Check, CheckCheck } from 'lucide-react';
+import { Plus, Rss, Settings as SettingsIcon, Download, Upload, Trash2, Palette, LogOut, User, Smartphone, ArrowLeft, GripVertical, MoreVertical, Edit, Check, CheckCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
