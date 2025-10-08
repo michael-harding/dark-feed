@@ -21,7 +21,6 @@ interface MobileFeedSidebarProps {
   onImportFeeds: (feeds: Feed[]) => void;
   onRemoveFeed: (feedId: string) => void;
   onRenameFeed: (feedId: string, newTitle: string) => void;
-  onMarkAllAsRead: (feedId: string) => void;
   onReorderFeeds: (reorderedFeeds: Feed[]) => void;
   onRefreshFeeds?: () => void;
   isLoading?: boolean;
@@ -35,7 +34,6 @@ export const MobileFeedSidebar = ({
   onImportFeeds,
   onRemoveFeed,
   onRenameFeed,
-  onMarkAllAsRead,
   onReorderFeeds,
   onRefreshFeeds,
   isLoading = false

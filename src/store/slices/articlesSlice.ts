@@ -104,27 +104,38 @@ const articlesSlice = createSlice({
       const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
       DataLayer.saveArticles(plainArticles);
     },
-    markAllAsReadForFeed: (state, action: PayloadAction<string>) => {
-      const feedId = action.payload;
-      state.articles.forEach(article => {
-        if (article.feedId === feedId) {
-          article.isRead = true;
-        }
-      });
-      // Reflect change in filteredArticles without re-sorting
-      state.filteredArticles.forEach(article => {
-        if (article.feedId === feedId) {
-          article.isRead = true;
-        }
-      });
-      // Save updated articles to database async - create a plain copy
-      const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
-      DataLayer.saveArticles(plainArticles);
-    },
     updateFilteredArticles: (state, action: PayloadAction<{ selectedFeed: string | null; sortMode: 'chronological' | 'unreadOnTop' }>) => {
       const { selectedFeed, sortMode } = action.payload;
       let filtered = DataLayer.filterArticles(state.articles, selectedFeed);
       state.filteredArticles = DataLayer.setSortOrderForArticles(filtered, sortMode);
+    },
+    markArticlesAsReadByAge: (state, action: PayloadAction<{ feedId: string; daysThreshold: number }>) => {
+      const { feedId, daysThreshold } = action.payload;
+      const thresholdDate = new Date();
+      thresholdDate.setDate(thresholdDate.getDate() - daysThreshold);
+
+      state.articles.forEach(article => {
+        if (article.feedId === feedId) {
+          const articleDate = new Date(article.publishedAt);
+          if (articleDate < thresholdDate) {
+            article.isRead = true;
+          }
+        }
+      });
+
+      // Reflect change in filteredArticles without re-sorting
+      state.filteredArticles.forEach(article => {
+        if (article.feedId === feedId) {
+          const articleDate = new Date(article.publishedAt);
+          if (articleDate < thresholdDate) {
+            article.isRead = true;
+          }
+        }
+      });
+
+      // Save updated articles to database async - create a plain copy
+      const plainArticles: Article[] = JSON.parse(JSON.stringify(state.articles));
+      DataLayer.saveArticles(plainArticles);
     },
   },
   extraReducers: (builder) => {
@@ -232,8 +243,8 @@ export const {
   markAsRead,
   removeArticlesByFeed,
   updateArticlesFeedTitle,
-  markAllAsReadForFeed,
   updateFilteredArticles,
+  markArticlesAsReadByAge,
 } = articlesSlice.actions;
 
 export default articlesSlice.reducer;
