@@ -24,11 +24,12 @@ export const loadFeeds = createAsyncThunk(
     const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
 
     if (!fetchStatus.shouldFetch) {
-      // Still load feeds from database to get current state
+      // Don't fetch RSS feeds, just load from database to get current state
       const feeds = await DataLayer.loadFeeds();
       return feeds;
     }
 
+    // Only fetch RSS feeds if the time interval has passed
     const feeds = await DataLayer.loadFeeds();
 
     // Update fetch time after successful load
@@ -171,8 +172,19 @@ export const refreshFeed = createAsyncThunk(
 // Async thunk to refresh all feeds
 export const refreshAllFeeds = createAsyncThunk(
   'feeds/refreshAllFeeds',
-  async ({ feeds, forceRefresh = false }: { feeds: Feed[]; forceRefresh?: boolean }, { getState }) => {
+  async ({ feeds, forceRefresh = false }: { feeds: Feed[]; forceRefresh?: boolean }, { getState, dispatch }) => {
     const results: Array<{ newArticles: Article[]; feed: Feed; error?: string }> = [];
+
+    // Early time check for non-force refresh (only applies to bulk refresh, not individual feeds)
+    if (!forceRefresh) {
+      const state = getState() as { ui: { refreshLimitInterval: number; feedFetchTime: string | null } };
+      const fetchStatus = await dispatch(checkFeedFetchStatus()).unwrap();
+
+      if (!fetchStatus.shouldFetch) {
+        // Return empty results for all feeds if time limit hasn't passed
+        return feeds.map(feed => ({ newArticles: [], feed, error: undefined }));
+      }
+    }
 
     for (const feed of feeds) {
       try {
