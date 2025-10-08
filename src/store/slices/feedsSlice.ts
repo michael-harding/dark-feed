@@ -44,8 +44,8 @@ export const addFeed = createAsyncThunk(
   'feeds/addFeed',
   async (url: string) => {
     try {
-      // New feeds should always fetch immediately, ignoring refresh limit
-      const data = await DataLayer.fetchRSSFeed(url, 0);
+      // New feeds should always fetch immediately, ignoring refresh limit, and should not include the previous feed fetch time
+      const data = await DataLayer.fetchRSSFeed(url, 0, false);
 
       if (data.status === 'skipped') {
         throw new Error('Feed fetching skipped on development server');
@@ -120,7 +120,8 @@ export const refreshFeed = createAsyncThunk(
     try {
       const state = getState() as { ui: { refreshLimitInterval: number } };
       const refreshLimitInterval = state.ui.refreshLimitInterval;
-      const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
+      // Manual refresh: ignore refresh limit but use time filter
+      const data = await DataLayer.fetchRSSFeed(feed.url, 0, true);
 
       if (data.status === 'skipped') {
         return { feedId, articles: [], skipped: true };
@@ -168,7 +169,9 @@ export const refreshAllFeeds = createAsyncThunk(
       try {
         const state = getState() as { ui: { refreshLimitInterval: number } };
         const refreshLimitInterval = forceRefresh ? 0 : state.ui.refreshLimitInterval;
-        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
+        // Always use time filter for refreshed feeds, but respect refresh limit for automatic refresh
+        const useTimeFilter = true;
+        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval, useTimeFilter);
 
         if (data.status === 'skipped') {
           results.push({ newArticles: [], feed });

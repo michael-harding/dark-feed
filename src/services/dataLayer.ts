@@ -669,14 +669,14 @@ export class DataLayer {
   };
 
   // RSS fetching
-  static fetchRSSFeed = async (url: string, refreshLimitMinutes: number = 0): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
+  static fetchRSSFeed = async (url: string, refreshLimitMinutes: number, useTimeFilter: boolean = true): Promise<{ status: string; feed: { title: string }; items: unknown[] }> => {
     const feed = await DataLayer.getFeedByUrl(url);
 
     try {
       // Get the global feed fetch time from user settings for the date filter
       await DataLayer.ensureProfileLoaded();
       const profileData = DataLayer.getCachedProfileData();
-      const feedTimeFilter = profileData.feedFetchTime ? `&date=${profileData.feedFetchTime.split('T')[0]}` : '';
+      const feedTimeFilter = (useTimeFilter && profileData.feedFetchTime) ? `&date=${profileData.feedFetchTime.split('T')[0]}` : '';
       const apiUrl = `https://dark-feed-worker.two-852.workers.dev/?url=${encodeURIComponent(url)}${feedTimeFilter}`;
 
       const response = await fetch(apiUrl);
