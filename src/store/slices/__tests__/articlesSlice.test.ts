@@ -6,7 +6,6 @@ import articlesReducer, {
   markAsRead,
   removeArticlesByFeed,
   updateArticlesFeedTitle,
-  markAllAsReadForFeed,
   updateFilteredArticles,
   loadArticles,
   saveArticles,
@@ -78,7 +77,7 @@ describe('articlesSlice', () => {
 
     store.dispatch(toggleStar('article-1'))
     const state = store.getState()
-    
+
     expect((state as any).articles.articles[0].isStarred).toBe(true)
   })
 
@@ -89,7 +88,7 @@ describe('articlesSlice', () => {
       filteredArticles: [],
       loading: false,
     }, toggleBookmark('article-1'))
-    
+
     expect(state.articles[0].isBookmarked).toBe(true)
   })
 
@@ -99,7 +98,7 @@ describe('articlesSlice', () => {
       filteredArticles: [...mockArticles],
       loading: false,
     }, markAsRead('article-1'))
-    
+
     expect(state.articles[0].isRead).toBe(true)
     expect(state.filteredArticles[0].isRead).toBe(true)
   })
@@ -110,7 +109,7 @@ describe('articlesSlice', () => {
       filteredArticles: [],
       loading: false,
     }, removeArticlesByFeed('feed-1'))
-    
+
     expect(state.articles).toHaveLength(0)
   })
 
@@ -120,22 +119,9 @@ describe('articlesSlice', () => {
       filteredArticles: [],
       loading: false,
     }, updateArticlesFeedTitle({ feedId: 'feed-1', newTitle: 'New Feed Title' }))
-    
+
     expect(state.articles[0].feedTitle).toBe('New Feed Title')
     expect(state.articles[1].feedTitle).toBe('New Feed Title')
-  })
-
-  it('should handle markAllAsReadForFeed', () => {
-    const state = articlesReducer({
-      articles: mockArticles,
-      filteredArticles: [...mockArticles],
-      loading: false,
-    }, markAllAsReadForFeed('feed-1'))
-    
-    expect(state.articles[0].isRead).toBe(true)
-    expect(state.articles[1].isRead).toBe(true)
-    expect(state.filteredArticles[0].isRead).toBe(true)
-    expect(state.filteredArticles[1].isRead).toBe(true)
   })
 
   it('should handle updateFilteredArticles', () => {
@@ -144,7 +130,7 @@ describe('articlesSlice', () => {
       filteredArticles: [],
       loading: false,
     }, updateFilteredArticles({ selectedFeed: 'all', sortMode: 'chronological' }))
-    
+
     expect(state.filteredArticles).toHaveLength(2)
   })
 

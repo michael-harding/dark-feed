@@ -27,15 +27,16 @@ import {
   markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
-  loadArticles,
-  toggleStar,
-  toggleBookmark,
-  markAsRead,
-  removeArticlesByFeed,
-  updateArticlesFeedTitle,
-  markAllAsReadForFeed,
-  updateFilteredArticles,
-} from '@/store/slices/articlesSlice';
+   loadArticles,
+   toggleStar,
+   toggleBookmark,
+   markAsRead,
+   removeArticlesByFeed,
+   updateArticlesFeedTitle,
+   markAllAsReadForFeed,
+   updateFilteredArticles,
+   markArticlesAsReadByAge,
+ } from '@/store/slices/articlesSlice';
 import {
    selectFeed,
    selectArticle,
@@ -76,9 +77,11 @@ interface SortableFeedItemProps {
   onRemove: (feedId: string) => void;
   onRename: (feedId: string, newTitle: string) => void;
   onMarkAllAsRead: (feedId: string) => void;
+  onMarkOlderThan30DaysAsRead: (feedId: string) => void;
+  onMarkOlderThan2WeeksAsRead: (feedId: string) => void;
 }
 
-const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: SortableFeedItemProps) => {
+const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead, onMarkOlderThan30DaysAsRead, onMarkOlderThan2WeeksAsRead }: SortableFeedItemProps) => {
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(feed.title);
   const {
@@ -182,6 +185,20 @@ const SortableFeedItem = ({ feed, onRemove, onRename, onMarkAllAsRead }: Sortabl
           >
             <CheckCheck className="w-4 h-4 mr-2" />
             Mark All as Read
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onMarkOlderThan30DaysAsRead(feed.id)}
+            disabled={feed.unreadCount === 0}
+          >
+            <CheckCheck className="w-4 h-4 mr-2" />
+            Mark Older than 30 Days as Read
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => onMarkOlderThan2WeeksAsRead(feed.id)}
+            disabled={feed.unreadCount === 0}
+          >
+            <CheckCheck className="w-4 h-4 mr-2" />
+            Mark Older than 2 Weeks as Read
           </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => onRemove(feed.id)}
@@ -489,13 +506,33 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
   };
 
   const handleMarkAllAsRead = (feedId: string) => {
-    dispatch(markAllAsReadForFeed(feedId));
+    dispatch(markArticlesAsReadByAge({ feedId, daysThreshold: 0 }));
     dispatch(markAllAsRead(feedId));
 
     const feed = feeds.find(f => f.id === feedId);
     toast({
       title: "Articles Marked as Read",
       description: `All articles in "${feed?.title}" have been marked as read.`,
+    });
+  };
+
+  const handleMarkOlderThan30DaysAsRead = (feedId: string) => {
+    dispatch(markArticlesAsReadByAge({ feedId, daysThreshold: 30 }));
+
+    const feed = feeds.find(f => f.id === feedId);
+    toast({
+      title: "Older Articles Marked as Read",
+      description: `Articles older than 30 days in "${feed?.title}" have been marked as read.`,
+    });
+  };
+
+  const handleMarkOlderThan2WeeksAsRead = (feedId: string) => {
+    dispatch(markArticlesAsReadByAge({ feedId, daysThreshold: 14 }));
+
+    const feed = feeds.find(f => f.id === feedId);
+    toast({
+      title: "Older Articles Marked as Read",
+      description: `Articles older than 2 weeks in "${feed?.title}" have been marked as read.`,
     });
   };
 
@@ -774,6 +811,8 @@ const Settings = ({ isMobile: propIsMobile = false }: SettingsProps) => {
                         onRemove={handleRemoveFeed}
                         onRename={handleRenameFeed}
                         onMarkAllAsRead={handleMarkAllAsRead}
+                        onMarkOlderThan30DaysAsRead={handleMarkOlderThan30DaysAsRead}
+                        onMarkOlderThan2WeeksAsRead={handleMarkOlderThan2WeeksAsRead}
                       />
                     ))}
                   </div>

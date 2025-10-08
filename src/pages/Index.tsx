@@ -17,7 +17,6 @@ import {
   updateFeedUnreadCount,
   importFeeds,
   setFeedUnreadCount,
-  markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
   loadArticles,
@@ -26,7 +25,6 @@ import {
   markAsRead,
   removeArticlesByFeed,
   updateArticlesFeedTitle,
-  markAllAsReadForFeed,
   updateFilteredArticles,
 } from '@/store/slices/articlesSlice';
 import {
@@ -341,16 +339,6 @@ const Index = () => {
     });
   };
 
-  const handleMarkAllAsRead = (feedId: string) => {
-    dispatch(markAllAsReadForFeed(feedId));
-    dispatch(markAllAsRead(feedId));
-
-    const feed = feeds.find(f => f.id === feedId);
-    toast({
-      title: "Articles Marked as Read",
-      description: `All articles in "${feed?.title}" have been marked as read.`,
-    });
-  };
 
   const handleToggleSortMode = () => {
     dispatch(toggleSortMode());
@@ -420,7 +408,6 @@ const Index = () => {
         onImportFeeds={handleImportFeeds}
         onRemoveFeed={handleRemoveFeed}
         onRenameFeed={handleRenameFeed}
-        onMarkAllAsRead={handleMarkAllAsRead}
         onReorderFeeds={handleReorderFeeds}
         onRefreshFeeds={handleRefreshFeeds}
         isLoading={isLoading}
