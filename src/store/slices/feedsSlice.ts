@@ -44,8 +44,8 @@ export const addFeed = createAsyncThunk(
   'feeds/addFeed',
   async (url: string) => {
     try {
-      // New feeds should always fetch immediately, ignoring refresh limit
-      const data = await DataLayer.fetchRSSFeed(url, 0);
+      // New feeds should always fetch immediately, ignoring refresh limit, and should not include the previous feed fetch time
+      const data = await DataLayer.fetchRSSFeed(url, 0, false);
 
       if (data.status === 'skipped') {
         throw new Error('Feed fetching skipped on development server');
@@ -76,46 +76,24 @@ export const addFeed = createAsyncThunk(
 // Async thunk to import multiple feeds
 export const importFeeds = createAsyncThunk(
   'feeds/importFeeds',
-  async (feedsToImport: Feed[], { getState }) => {
+  async (feedsToImport: Feed[], { dispatch }) => {
+    const results: Array<{ articles: Article[]; feed: Feed; error?: string }> = [];
+
+    // Get current feeds to check for duplicates
     const currentFeeds = await DataLayer.loadFeeds();
     const existingUrls = new Set(currentFeeds.map(feed => feed.url));
-
-    const results: Array<{ articles: Article[]; feed: Feed; error?: string }> = [];
 
     for (const feed of feedsToImport) {
       if (!existingUrls.has(feed.url)) {
         try {
-          // Import should always fetch immediately, ignoring refresh limit
-          const data = await DataLayer.fetchRSSFeed(feed.url, 0);
-
-          if (data.status === 'skipped') {
-            results.push({ articles: [], feed, error: 'Feed fetching skipped on development server' });
-            continue;
-          }
-
-          // Validate that feed.id is a proper UUID, generate new one if not
-          const isValidUUID = feed.id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(feed.id);
-          const feedId = isValidUUID ? feed.id : crypto.randomUUID();
-          const newFeed: Feed = {
-            id: feedId,
-            title: data.feed?.title || feed.title || 'Unknown Feed',
-            url: feed.url,
-            unreadCount: data.items?.length || 0,
-            category: feed.category
-          };
-
-          await DataLayer.saveFeed(newFeed, ['title', 'url', 'unreadCount', 'category']);
-
-          const existingUrls = await DataLayer.getExistingArticleUrlsForFeed(feedId);
-          const feedArticles = DataLayer.createArticlesFromRSSData(data, feedId, newFeed.title)
-            .filter(article => !existingUrls.has(article.url));
-
-          results.push({ articles: feedArticles, feed: newFeed });
+          // Use the working addFeed thunk for each individual feed
+          const result = await dispatch(addFeed(feed.url)).unwrap();
+          results.push(result);
         } catch (error) {
           console.error(`Failed to import feed ${feed.url}:`, error);
           results.push({
             articles: [],
-            feed,
+            feed: { ...feed, title: 'Unknown Feed', unreadCount: 0 },
             error: error instanceof Error ? error.message : 'Unknown error'
           });
         }
@@ -142,7 +120,8 @@ export const refreshFeed = createAsyncThunk(
     try {
       const state = getState() as { ui: { refreshLimitInterval: number } };
       const refreshLimitInterval = state.ui.refreshLimitInterval;
-      const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
+      // Manual refresh: ignore refresh limit but use time filter
+      const data = await DataLayer.fetchRSSFeed(feed.url, 0, true);
 
       if (data.status === 'skipped') {
         return { feedId, articles: [], skipped: true };
@@ -190,7 +169,9 @@ export const refreshAllFeeds = createAsyncThunk(
       try {
         const state = getState() as { ui: { refreshLimitInterval: number } };
         const refreshLimitInterval = forceRefresh ? 0 : state.ui.refreshLimitInterval;
-        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval);
+        // Always use time filter for refreshed feeds, but respect refresh limit for automatic refresh
+        const useTimeFilter = true;
+        const data = await DataLayer.fetchRSSFeed(feed.url, refreshLimitInterval, useTimeFilter);
 
         if (data.status === 'skipped') {
           results.push({ newArticles: [], feed });
@@ -307,9 +288,14 @@ const feedsSlice = createSlice({
       })
       .addCase(importFeeds.fulfilled, (state, action) => {
         const successfulFeeds = action.payload
-          .filter(result => !result.error && result.articles.length >= 0)
+          .filter(result => !result.error)
           .map(result => result.feed);
-        state.feeds.push(...successfulFeeds);
+
+        // Ensure no duplicate IDs in the combined feed list
+        const existingIds = new Set(state.feeds.map(feed => feed.id));
+        const uniqueFeeds = successfulFeeds.filter(feed => !existingIds.has(feed.id));
+
+        state.feeds.push(...uniqueFeeds);
         state.isLoading = false;
       })
       .addCase(importFeeds.rejected, (state, action) => {

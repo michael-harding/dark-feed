@@ -8,14 +8,12 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
-  addFeed,
   loadFeeds,
   refreshAllFeeds,
   removeFeed,
   renameFeed,
   reorderFeeds,
   updateFeedUnreadCount,
-  importFeeds,
   setFeedUnreadCount,
 } from '@/store/slices/feedsSlice';
 import {
@@ -395,23 +393,6 @@ const Mobile = () => {
   }, [selectedFeed, selectedArticle, articles]);
 
   // Handlers
-  const handleAddFeed = async (url: string) => {
-    try {
-      const result = await dispatch(addFeed(url)).unwrap();
-      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-      toast({
-        title: "Feed Added",
-        description: `Successfully added ${result.feed.title}`,
-      });
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to add RSS feed. Please check the URL.",
-        variant: "destructive",
-      });
-    }
-  };
-
   const handleToggleStar = (articleId: string) => {
     dispatch(toggleStar(articleId));
   };
@@ -426,60 +407,6 @@ const Mobile = () => {
       dispatch(markAsRead(articleId));
       const delta = article.isRead ? 1 : -1;
       dispatch(updateFeedUnreadCount({ feedId: article.feedId, delta }));
-    }
-  };
-
-  const handleImportFeeds = async (importedFeeds: Feed[]) => {
-    const existingUrls = feeds.map(f => f.url);
-    const newFeeds = importedFeeds.filter(feed => !existingUrls.includes(feed.url));
-
-    if (newFeeds.length === 0) {
-      toast({
-        title: "No New Feeds",
-        description: "All feeds in the import file already exist.",
-      });
-      return;
-    }
-
-    try {
-      const results = await dispatch(importFeeds(newFeeds)).unwrap();
-      const currentArticles = articles;
-
-      const successfulResults = results.filter(result => !result.error);
-      const failedResults = results.filter(result => result.error);
-
-      successfulResults.forEach(({ articles: newArticles, feed }) => {
-        if (newArticles.length > 0) {
-          const existingFeedArticles = currentArticles.filter(a => a.feedId === feed.id);
-          const newFeedArticles = newArticles.filter(a => a.feedId === feed.id);
-          const allFeedArticles = [...existingFeedArticles, ...newFeedArticles];
-          const unreadCount = allFeedArticles.filter(a => !a.isRead).length;
-
-          dispatch(setFeedUnreadCount({ feedId: feed.id, count: unreadCount }));
-        }
-      });
-
-      dispatch(updateFilteredArticles({ selectedFeed, sortMode }));
-
-      const successfulCount = successfulResults.length;
-      const failedCount = failedResults.length;
-
-      let description = `Successfully imported ${successfulCount} feed(s).`;
-      if (failedCount > 0) {
-        description += ` ${failedCount} feed(s) failed to import.`;
-      }
-
-      toast({
-        title: "Feeds Imported",
-        description,
-        variant: failedCount > 0 ? "destructive" : "default",
-      });
-    } catch (error) {
-      toast({
-        title: "Import Error",
-        description: "Failed to import some feeds. Check the console for details.",
-        variant: "destructive",
-      });
     }
   };
 
@@ -598,11 +525,6 @@ const Mobile = () => {
           feeds={feeds}
           selectedFeed={selectedFeed}
           onFeedSelect={handleFeedSelect}
-          onAddFeed={handleAddFeed}
-          onImportFeeds={handleImportFeeds}
-          onRemoveFeed={handleRemoveFeed}
-          onRenameFeed={handleRenameFeed}
-          onReorderFeeds={handleReorderFeeds}
           onRefreshFeeds={handleRefreshFeeds}
           isLoading={isLoading && feeds.length === 0}
         />
