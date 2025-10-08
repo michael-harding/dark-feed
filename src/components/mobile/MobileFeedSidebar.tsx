@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Rss, Settings, Bookmark, Star, User, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
