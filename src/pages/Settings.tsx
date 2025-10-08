@@ -33,7 +33,6 @@ import {
    markAsRead,
    removeArticlesByFeed,
    updateArticlesFeedTitle,
-   markAllAsReadForFeed,
    updateFilteredArticles,
    markArticlesAsReadByAge,
  } from '@/store/slices/articlesSlice';
