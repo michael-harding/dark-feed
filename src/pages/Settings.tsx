@@ -16,20 +16,14 @@ import { Feed } from '@/services/dataLayer';
 import {
   addFeed,
   loadFeeds,
-  refreshAllFeeds,
   removeFeed,
   renameFeed,
   reorderFeeds,
-  updateFeedUnreadCount,
   importFeeds,
   setFeedUnreadCount,
   markAllAsRead,
 } from '@/store/slices/feedsSlice';
 import {
-   loadArticles,
-   toggleStar,
-   toggleBookmark,
-   markAsRead,
    removeArticlesByFeed,
    updateArticlesFeedTitle,
    updateFilteredArticles,
@@ -37,11 +31,8 @@ import {
  } from '@/store/slices/articlesSlice';
 import {
    selectFeed,
-   selectArticle,
-   toggleSortMode,
    loadUserSettings,
    setAccentColor,
-   setInitialLoading,
    setRefreshLimitInterval,
  } from '@/store/slices/uiSlice';
 import { useToast } from '@/hooks/use-toast';
